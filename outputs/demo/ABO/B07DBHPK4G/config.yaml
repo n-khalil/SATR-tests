@@ -2,8 +2,8 @@ dataset: faust
 backend: satr+glip
 backend_type: detection_based
 dataset_dir: data/demo
-region_names: '[''arms'', ''back'']'
-object_class: chair
+region_names: '[''lampshade'', ''neck'', ''body'', ''base'']'
+object_class: lamp
 satr:
   gaussian_reweighting: true
   face_smoothing: true
