@@ -92,6 +92,7 @@ class Renderer:
                 face_attributes,
                 face_normals[:, :, -1],
             )
+
             masks.append(soft_mask)
             faces_idx.append(face_idx)
 
@@ -125,7 +126,7 @@ class Renderer:
 
         images = torch.cat(images, dim=0).permute(0, 3, 1, 2)
         masks = torch.cat(masks, dim=0)
-
+        print(images[i].shape)
         if show:
             with torch.no_grad():
                 fig, axs = plt.subplots(
