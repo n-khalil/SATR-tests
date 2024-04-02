@@ -126,19 +126,21 @@ class Renderer:
 
         images = torch.cat(images, dim=0).permute(0, 3, 1, 2)
         masks = torch.cat(masks, dim=0)
-        print(images[i].shape)
+        
         if show:
             with torch.no_grad():
-                fig, axs = plt.subplots(
-                    1 + (num_views - 1) // 4, min(4, num_views), figsize=(89.6, 22.4)
-                )
+                # fig, axs = plt.subplots(
+                #     1 + (num_views - 1) // 4, min(4, num_views), figsize=(89.6, 22.4)
+                # )
+                fig, axs = plt.subplots(2,5,figsize=(80,22))
                 for i in range(num_views):
                     if num_views == 1:
                         ax = axs
                     elif num_views <= 4:
                         ax = axs[i]
                     else:
-                        ax = axs[i // 4, i % 4]
+                        # ax = axs[i // 4, i % 4]
+                        ax = axs[i // 5, i % 5]
                     ax.imshow(images[i].permute(1, 2, 0).cpu().numpy())
                 plt.show()
 

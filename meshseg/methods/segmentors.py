@@ -10,6 +10,8 @@ from collections import Counter
 from collections import defaultdict
 from scipy.spatial.distance import cdist
 
+import matplotlib.pyplot as plt
+
 from ..models.GLIP.glip import GLIPModel
 
 
@@ -128,6 +130,7 @@ class GLIPMeshSegmenter(BaseDetMeshSegmentor):
         # Get the bounding boxes predictions for the given prompts
         self.predict_bboxes()
         assert self.bbox_predictions is not None
+        print(f"Finished GLIP")
 
         face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
         face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
@@ -135,6 +138,7 @@ class GLIPMeshSegmenter(BaseDetMeshSegmentor):
         # Looping over the views
         for i, view in tqdm(enumerate(self.rendered_images)):
             for j, prompt in enumerate(self.prompts):
+                print(f'Processing view: {i}, Prompt: {j}')
                 (
                     face_view_prompt_score,
                     face_view_prompt_freq,
@@ -152,6 +156,9 @@ class GLIPMeshSegmenter(BaseDetMeshSegmentor):
         # Generate GLIP predictions for every rendered image
         print("Feeding the views to GLIP...")
         self.bbox_predictions = []
+        num_views = len(self.rendered_images)
+        # fig, axs = plt.subplots(2,5,figsize=(80,22))
+                        
         for i in range(len(self.rendered_images)):
             self.bbox_predictions.append({})
 
@@ -159,7 +166,10 @@ class GLIPMeshSegmenter(BaseDetMeshSegmentor):
             img = img.to(torch.uint8)
 
             for p in self.prompts:
+                # print('View number:', i, 'Prompt:', p, end=' ')
                 res = self.glip_model.predict(img.cpu().numpy(), p)
+                # ax = axs[i // 5, i % 5]
+                # ax.imshow(res[0])
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
 
     def __call__(self):
@@ -183,7 +193,9 @@ class SATR(GLIPMeshSegmenter):
     def set_mesh(self, mesh):
         super().set_mesh(mesh)
 
+        print(f"Getting faces neighborhood")
         self.get_faces_neighborhood()
+        print(f"Computing vertices pairwise distances")
         self.compute_vertices_pairwise_dist()
 
     def get_faces_neighborhood(self):

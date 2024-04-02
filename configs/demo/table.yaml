@@ -3,9 +3,8 @@ backend: satr+glip
 backend_type: detection_based
 dataset_dir: "data/demo"
 
-# region_names: "['headboard', 'mattress', 'bed frame', 'footboard', 'legs']"
-region_names: "['mattress', 'bed frame']"
-object_class: "bed"
+region_names: "['frame', 'edges', 'legs', 'top']"
+object_class: "table"
 
 satr:
   gaussian_reweighting: true
