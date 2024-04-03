@@ -1,4 +1,6 @@
-# SATR: Zero-Shot Semantic Segmentation of 3D Shapes
+# SATR-tests
+
+# Tests for the paper: SATR: Zero-Shot Semantic Segmentation of 3D Shapes
 [![Website Badge](https://raw.githubusercontent.com/referit3d/referit3d/eccv/images/project_website_badge.svg)](https://samir55.github.io/SATR/)
 [![arXiv](https://img.shields.io/badge/arXiv-2304.04909-b31b1b.svg?style=plastic)](https://arxiv.org/abs/2304.04909)
 
@@ -27,7 +29,7 @@ from KAUST and LIX, Ecole Polytechnique.
 conda create -n meshseg python=3.9
 conda activate meshseg
 conda install cudatoolkit=11.1 -c conda-forge
-pip install torch==1.10.1+cu111 torchvision==0.11.2+cu111 torchaudio==0.10.1 -f https://download.pytorch.org/whl/cu111/torch_stable.html
+pip install torch==1.10.2 torchvision==0.11.3 torchaudio --index-url https://download.pytorch.org/whl/cu113
 ```
 
 ### B. Build/Install Kaolin
