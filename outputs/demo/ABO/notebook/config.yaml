@@ -2,7 +2,7 @@ dataset: faust
 backend: satr+glip
 backend_type: detection_based
 dataset_dir: data/demo
-region_names: '[''cover'', ''binding'', ''pages'', ''elastic band'']'
+region_names: '[''cover'', ''pages'']'
 object_class: notebook
 satr:
   gaussian_reweighting: true
