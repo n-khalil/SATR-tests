@@ -1,5 +1,6 @@
 data/
 GLIP/MODEL/
+SAM/MODEL/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
