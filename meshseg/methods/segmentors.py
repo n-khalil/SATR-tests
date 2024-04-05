@@ -11,6 +11,7 @@ from collections import defaultdict
 from scipy.spatial.distance import cdist
 
 import matplotlib.pyplot as plt
+import cv2
 
 from ..models.GLIP.glip import GLIPModel
 
@@ -157,20 +158,49 @@ class GLIPMeshSegmenter(BaseDetMeshSegmentor):
         print("Feeding the views to GLIP...")
         self.bbox_predictions = []
         num_views = len(self.rendered_images)
-        fig, axs = plt.subplots(2,5,figsize=(80,22))
-                        
+
+        # fig, axs = plt.subplots(2,5,figsize=(80,22))
+        fig, axs = plt.subplots(3,4,figsize=(80,22))
+
+        colors_dict = {
+            0: [255, 0, 0],   # Red
+            1: [0, 255, 0],   # Green
+            2: [0, 0, 255],   # Blue
+            3: [255, 255, 0],   # Yellow
+            4: [255, 0, 255],   # Magenta
+            5: [0, 255, 255],   # Cyan
+            6: [128, 0, 0], # Dark Red
+            7: [0, 128, 0], # Dark Green
+            8: [0, 0, 128], # Dark Blue
+            9: [128, 128, 128] # Gray
+        }
+
         for i in range(len(self.rendered_images)):
             self.bbox_predictions.append({})
 
             img = self.rendered_images[i].permute([1, 2, 0]) * 256.0
             img = img.to(torch.uint8)
-
-            for p in self.prompts:
-                print('View number:', i, 'Prompt:', p, end=' ')
+            img_to_show = img.cpu().numpy().copy()
+            ax = axs[i // 4, i % 4]
+            for p_idx, p in enumerate(self.prompts):
+                print('View number:', i, 'Prompt:', p_idx, end=' ')
+                
                 res = self.glip_model.predict(img.cpu().numpy(), p)
-                ax = axs[i // 5, i % 5]
-                ax.imshow(res[0])
+                
+                num_bboxes = len(res[1].bbox)
+
+                for bbox_idx in range(num_bboxes):
+                    startX = int(res[1].bbox[bbox_idx][0].item())
+                    startY = int(res[1].bbox[bbox_idx][1].item())
+                    endX = int(res[1].bbox[bbox_idx][2].item())
+                    endY = int(res[1].bbox[bbox_idx][3].item())
+                    cv2.rectangle(img_to_show, (startX, startY), (endX, endY), colors_dict[p_idx], 2)
+                    score = res[1].get_field('scores')[bbox_idx].item()
+                    cv2.putText(img_to_show, p + " " + str(score), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, colors_dict[p_idx], 2)
+                
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
+            
+            ax.imshow(img_to_show)
         plt.show()
 
     def __call__(self):

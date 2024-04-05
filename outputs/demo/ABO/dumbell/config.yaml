@@ -3,7 +3,7 @@ backend: satr+glip
 backend_type: detection_based
 dataset_dir: data/demo
 region_names: '[''weights'', ''handle'']'
-object_class: armchair
+object_class: dumbell
 satr:
   gaussian_reweighting: true
   face_smoothing: true

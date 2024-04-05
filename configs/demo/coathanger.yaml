@@ -3,7 +3,7 @@ backend: satr+glip
 backend_type: detection_based
 dataset_dir: "data/demo"
 
-region_names: "['base', 'hooks', 'installation']"
+region_names: "['hooks', 'installation']"
 object_class: "coathanger"
 
 satr:

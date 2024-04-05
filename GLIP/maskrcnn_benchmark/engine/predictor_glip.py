@@ -280,6 +280,7 @@ class GLIPDemo(object):
             box = box.to(torch.int64)
             image = cv2.putText(image, '%.3f' % score,
                                 (int(box[0]), int((box[1] + box[3]) / 2)),
+                                # cv2.FONT_HERSHEY_SIMPLEX, 0.3,
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.3,
                                 (255, 255, 255), 1)
 
@@ -305,7 +306,8 @@ class GLIPDemo(object):
             x, y = box[:2]
             s = template.format(label, score)
             cv2.putText(
-                image, s, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
+                # image, s, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
+                image, s, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, .7, (255, 0, 0), 2
             )
 
         return image

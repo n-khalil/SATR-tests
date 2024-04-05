@@ -2,7 +2,7 @@ dataset: faust
 backend: satr+glip
 backend_type: detection_based
 dataset_dir: data/demo
-region_names: '[''headboard'', ''mattress'', ''bed frame'', ''footboard'', ''legs'']'
+region_names: '[''headboard'', ''mattress'', ''bed frame'', ''legs'']'
 object_class: bed
 satr:
   gaussian_reweighting: true

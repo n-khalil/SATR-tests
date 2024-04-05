@@ -4,7 +4,7 @@ backend_type: detection_based
 dataset_dir: data/demo
 region_names: '[''drawers'', ''handles'', ''top panel'', ''side panels'', ''bottom
   panel'', ''back panel'']'
-object_class: armchair
+object_class: cabinet
 satr:
   gaussian_reweighting: true
   face_smoothing: true

@@ -4,6 +4,7 @@ backend_type: detection_based
 dataset_dir: "data/demo"
 
 region_names: "['drawers', 'handles', 'top panel', 'side panels', 'bottom panel', 'back panel']"
+# region_names: "['drawers', 'sides']"
 object_class: "cabinet"
 
 satr:

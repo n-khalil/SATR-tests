@@ -3,7 +3,7 @@ backend: satr+glip
 backend_type: detection_based
 dataset_dir: "data/demo"
 
-region_names: "['top panel', 'drawers', 'side panels', 'base', 'back panel']"
+region_names: "['top panel', 'drawers', 'side panels', 'bottom', 'back panel']"
 object_class: "nightstand"
 
 satr:
