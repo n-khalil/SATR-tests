@@ -14,10 +14,7 @@ import matplotlib.pyplot as plt
 import cv2
 
 from ..models.GLIP.glip import GLIPModel
-from ..models.SAM.sam import *
-import sys
-# sys.path.append("D:/SATR/")
-# from SAM import SamPredictor, sam_model_registry
+from ..models.SAM.sam import SAMModel
 
 
 class BaseMeshSegmentor:
@@ -220,13 +217,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         super().__init__(cfg)
 
         self.glip_model = GLIPModel()
-        # import os        
-        # print(os.getcwd())
-        # peng_img = plt.imread('./data/img/penguin.png')
-        # plt.imshow(peng_img)
-        # plt.show()
-        # self.sam_model = sam_model_registry["vit_h"](checkpoint="./SAM/MODEL/sam_vit_h_4b8939.pth")
-        # self.sam_model = sam_model_registry["vit_h"](checkpoint=sam_path)
+        self.sam_model = SAMModel()
 
         self.colors_dict = {
             0: [255, 0, 0],   # Red

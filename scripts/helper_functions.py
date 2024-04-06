@@ -139,7 +139,6 @@ def segment(
     # Create the segmenter
     # segmenter = SATR(config)
     segmenter = SATRSAM(config)
-    print('Using SAM')
     segmenter.set_mesh(mesh)
     segmenter.set_prompts(prompts)
     segmenter.set_rendered_views(rendered_images, faces_idx)
