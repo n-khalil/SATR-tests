@@ -1,6 +1,6 @@
 import torch
 import sys
-sys.path.append("D:/SATR/GLIP")
+sys.path.append('./GLIP/')
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.engine.predictor_glip import GLIPDemo
 
