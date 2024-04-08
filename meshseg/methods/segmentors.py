@@ -237,7 +237,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         self.predict_bboxes()
         assert self.bbox_predictions is not None
         print(f"Finished GLIP")
-        self.predict_exact_masks()
+        # self.predict_exact_masks()
 
         face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
         face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
@@ -297,26 +297,44 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         plt.show()
     
     def predict_exact_masks(self):
-        p_idx = 0
-        i = 0
-        p = self.prompts[p_idx]
-        print('First view, prompt = ', p)
-        img = (self.rendered_images[i].permute([1, 2, 0]) * 256.0).to(torch.uint8).cpu().numpy().copy()
-        res = self.bbox_predictions[i][p][0]
-        num_bboxes = len(res[1].bbox)
-        print('Num bboxes =', num_bboxes)
-        for bbox_idx in range(num_bboxes):
-            # print(res[1].bbox[bbox_idx][0].item())
-            # print('Printed success')
-            startX = int(res[1].bbox[bbox_idx][0].item())
-            startY = int(res[1].bbox[bbox_idx][1].item())
-            endX = int(res[1].bbox[bbox_idx][2].item())
-            endY = int(res[1].bbox[bbox_idx][3].item())
-            cv2.rectangle(img, (startX, startY), (endX, endY), self.colors_dict[p_idx], 2)
-            score = res[1].get_field('scores')[bbox_idx].item()
-            cv2.putText(img, p + " " + str(score), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_idx], 2)
-        plt.imshow(img)
+        num_views = len(self.rendered_images)
+        fig, axs = plt.subplots(3, 4, figsize=(80,22))
+        for i in range(num_views):
+            img = (self.rendered_images[i].permute([1, 2, 0]) * 256.0).to(torch.uint8).cpu().numpy().copy()
+            self.sam_model.set_img(img)
+            ax = axs[i // 4, i % 4]
+            ax.imshow(img)
+            for p_idx in range(len(self.prompts)):
+                p = self.prompts[p_idx]
+                res = self.bbox_predictions[i][p][0]
+                num_bboxes = len(res[1].bbox)
+                for bbox_idx in range(num_bboxes):
+                    startX = int(res[1].bbox[bbox_idx][0].item())
+                    startY = int(res[1].bbox[bbox_idx][1].item())
+                    endX = int(res[1].bbox[bbox_idx][2].item())
+                    endY = int(res[1].bbox[bbox_idx][3].item())
+                    cv2.rectangle(img, (startX, startY), (endX, endY), self.colors_dict[p_idx], 2)
+                    masks = self.sam_model.predict(np.array([startX, startY, endX, endY]))
+                    self.show_mask(masks[0], ax, np.array(self.colors_dict[p_idx]) / 255.0)
         plt.show()
+
+
+    def show_mask(self, mask, ax, input_color = None, random_color=False):
+        if random_color:
+            color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+        else:
+            if input_color is None:
+                color = np.array([30/255, 144/255, 255/255, 0.6])
+            color = np.array([input_color[0], input_color[1], input_color[2], 0.6])
+        h, w = mask.shape[-2:]
+        mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+        ax.imshow(mask_image)
+
+    def show_box(self, box, ax, color):
+        x0, y0 = box[0], box[1]
+        w, h = box[2] - box[0], box[3] - box[1]
+        # ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))
+        ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor=color, facecolor=(0,0,0,0), lw=2))
 
 
     def __call__(self):

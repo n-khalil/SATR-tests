@@ -12,9 +12,13 @@ class SAMModel:
         self.sam = sam_model_registry["vit_h"](checkpoint= weight_file)
         self.model = SamPredictor(self.sam)
 
-    def predict(self, img, text):
-        with torch.no_grad():
-            return self.model.run_on_web_image(img, text, 0.5)
-    
+    def predict(self, bbox, multimask_output=False):
+        masks, _, _ = self.model.predict(
+        point_coords=None,
+        point_labels=None,
+        box=bbox[None, :],
+        multimask_output=multimask_output)
+        return masks
+
     def set_img(self, img):
         self.model.set_image(img)

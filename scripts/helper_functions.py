@@ -98,18 +98,28 @@ def segment(
             mesh.faces,
         )
     else:
-        mesh.face_attributes = kaolin.ops.mesh.index_vertices_by_faces(
-            torch.ones(1, len(mesh.vertices), 3).cuda()
-            * torch.tensor(config.color).unsqueeze(0).unsqueeze(0).cuda(),
-            mesh.faces,
-        )
+        if isinstance(config.color, str) and config.color == 'vertex normals':
+            mesh.face_attributes = kaolin.ops.mesh.index_vertices_by_faces(
+                mesh.vertex_normals.unsqueeze(0),
+                mesh.faces
+            )            
+        else:
+            mesh.face_attributes = kaolin.ops.mesh.index_vertices_by_faces(
+                torch.ones(1, len(mesh.vertices), 3).cuda()
+                * torch.tensor(config.color).unsqueeze(0).unsqueeze(0).cuda(),
+                mesh.faces,
+            )
 
     # Create the renderer
     print(f"Creating the renderer...")
     render = Renderer(dim=(config.camera.render_res, config.camera.render_res))
 
     # Initialize Background
-    background = torch.tensor([0.0, 0.0, 0.0]).to(device)
+    if "background" not in config:
+        background = torch.tensor([0.0, 0.0, 0.0]).to(device)
+    else:
+        background = torch.tensor(config.background).to(device)
+    
     with torch.no_grad():
         print(f"Rendering the views...")
         elev = None

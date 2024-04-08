@@ -15,3 +15,8 @@ camera:
   - 3.14
   - 0.0
   render_res: 1024
+color: vertex normals
+background:
+- 255.0
+- 255.0
+- 255.0

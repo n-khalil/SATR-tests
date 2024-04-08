@@ -13,8 +13,7 @@ class Mesh:
         if ".obj" in obj_path:
             mesh = kal.io.obj.import_mesh(
                 obj_path,
-                # with_normals=True,
-                with_normals=False,
+                with_normals=True,
                 with_materials=False,
             )
         elif ".off" in obj_path:
@@ -33,7 +32,6 @@ class Mesh:
         if ".obj" in obj_path:
             if mesh.vertex_normals is not None:
                 self.vertex_normals = mesh.vertex_normals.to(device).float()
-
                 # Normalize
                 self.vertex_normals = torch.nn.functional.normalize(self.vertex_normals)
 
