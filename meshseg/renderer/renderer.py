@@ -43,6 +43,7 @@ class Renderer:
         return_mask=False,
         return_face_idx=False,
         seed=None,
+        random_rendering=False
     ):
         # Front view with small perturbations in viewing angle
         verts = mesh.vertices
@@ -56,11 +57,15 @@ class Renderer:
             gen = None
 
         if elev is None:
-            # elev = torch.randn(num_views, generator=gen) * np.pi / std + center_elev
-            elev = torch.deg2rad(torch.tensor([-45, 0, 45]))
+            if random_rendering:
+                elev = torch.randn(num_views, generator=gen) * np.pi / std + center_elev
+            else:
+                elev = torch.deg2rad(torch.tensor([-45, 0, 45]))
         if azim is None:
-            # azim = torch.randn(num_views, generator=gen) * 2 * np.pi / std + center_azim
-            azim = torch.deg2rad(torch.tensor([0, 90, 180, 270]))
+            if random_rendering:
+                azim = torch.randn(num_views, generator=gen) * 2 * np.pi / std + center_azim
+            else:
+                azim = torch.deg2rad(torch.tensor([0, 90, 180, 270]))
         
         images = []
         masks = []
@@ -75,10 +80,9 @@ class Renderer:
         else:
             face_attributes = mesh.face_attributes
 
-        # for i in range(num_views):
-        for i in range(elev.shape[0]):
-            for j in range(azim.shape[0]):
-                camera_transform = get_camera_from_view2(elev[i], azim[j], r=2).to(device)
+        if random_rendering:
+            for i in range(num_views):
+                camera_transform = get_camera_from_view2(elev[i], azim[i], r=2).to(device)
                 (
                     face_vertices_camera,
                     face_vertices_image,
@@ -128,6 +132,59 @@ class Renderer:
                     ] = background  # .repeat(background_idx[0].shape)
                     image = torch.clamp(image + background_mask, 0.0, 1.0)
                 images.append(image)
+        else:
+            for i in range(elev.shape[0]):
+                for j in range(azim.shape[0]):
+                    camera_transform = get_camera_from_view2(elev[i], azim[j], r=2).to(device)
+                    (
+                        face_vertices_camera,
+                        face_vertices_image,
+                        face_normals,
+                    ) = kal.render.mesh.prepare_vertices(
+                        mesh.vertices.to(device),
+                        mesh.faces.to(device),
+                        self.camera_projection,
+                        camera_transform=camera_transform,
+                    )
+                    image_features, soft_mask, face_idx = kal.render.mesh.dibr_rasterization(
+                        self.dim[1],
+                        self.dim[0],
+                        face_vertices_camera[:, :, :, -1],
+                        face_vertices_image,
+                        face_attributes,
+                        face_normals[:, :, -1],
+                    )
+
+                    masks.append(soft_mask)
+                    faces_idx.append(face_idx)
+
+                    if background is not None:
+                        image_features, mask = image_features
+
+                    image = torch.clamp(image_features, 0.0, 1.0)
+
+                    if lighting:
+                        image_normals = face_normals[:, face_idx].squeeze(0)
+                        image_lighting = kal.render.mesh.spherical_harmonic_lighting(
+                            image_normals, self.lights
+                        ).unsqueeze(0)
+                        image = image * image_lighting.repeat(1, 3, 1, 1).permute(
+                            0, 2, 3, 1
+                        ).to(device)
+                        image = torch.clamp(image, 0.0, 1.0)
+
+                    if background is not None:
+                        background_mask = torch.zeros(image.shape).to(device)
+                        mask = mask.squeeze(-1)
+                        background_idx = torch.where(mask == 0)
+                        assert torch.all(
+                            image[background_idx] == torch.zeros(3).to(device)
+                        )  # Remvoe it may be taking a lot of time
+                        background_mask[
+                            background_idx
+                        ] = background  # .repeat(background_idx[0].shape)
+                        image = torch.clamp(image + background_mask, 0.0, 1.0)
+                    images.append(image)
 
         images = torch.cat(images, dim=0).permute(0, 3, 1, 2)
         masks = torch.cat(masks, dim=0)

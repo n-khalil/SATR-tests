@@ -17,3 +17,8 @@ camera:
   frontview_std: 4
   frontview_center: [3.14, 0.0]
   render_res: 1024
+  random_rendering: False
+
+color: "vertex normals"
+
+background: [255.0, 255.0, 255.0]

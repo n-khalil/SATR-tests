@@ -119,6 +119,11 @@ def segment(
         background = torch.tensor([0.0, 0.0, 0.0]).to(device)
     else:
         background = torch.tensor(config.background).to(device)
+
+    if "camera.random_rendering" in config:
+        random_rendering = config.random_rendering
+    else:
+        random_rendering = False
     
     with torch.no_grad():
         print(f"Rendering the views...")
@@ -140,7 +145,11 @@ def segment(
             lighting=True,
             background=background,
             seed=2023,
+            random_rendering=random_rendering
         )
+        print('Faces_idx:', faces_idx.shape)
+        # print('Faces_idx:', faces_idx.shape)
+
         print(f"Rendering the views...done")
     #
     # Segmentation
