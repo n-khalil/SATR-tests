@@ -271,7 +271,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         for i in range(len(self.rendered_images)):
             self.bbox_predictions.append({})
 
-            img = self.rendered_images[i].permute([1, 2, 0]) * 256.0
+            # img = self.rendered_images[i].permute([1, 2, 0]) * 256.0
+            img = self.rendered_images[i].permute([1, 2, 0]) * 255.0
             img = img.to(torch.uint8)
             img_to_show = img.cpu().numpy().copy()
             ax = axs[i // 4, i % 4]
@@ -289,12 +290,13 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                     endY = int(res[1].bbox[bbox_idx][3].item())
                     cv2.rectangle(img_to_show, (startX, startY), (endX, endY), self.colors_dict[p_idx], 2)
                     score = res[1].get_field('scores')[bbox_idx].item()
-                    cv2.putText(img_to_show, p + " " + str(score), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_idx], 2)
+                    cv2.putText(img_to_show, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_idx], 2)
                 
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
             ax.imshow(img_to_show)
         plt.show()
+
     
     def predict_exact_masks(self):
         num_views = len(self.rendered_images)
