@@ -147,9 +147,6 @@ def segment(
             seed=2023,
             random_rendering=random_rendering
         )
-        print('Faces_idx:', faces_idx.shape)
-        # print('Faces_idx:', faces_idx.shape)
-
         print(f"Rendering the views...done")
     #
     # Segmentation
