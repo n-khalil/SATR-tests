@@ -135,7 +135,7 @@ def segment(
             2,
             mesh,
             num_views=config.camera.n_views,
-            show=True,
+            show=False,
             center_azim=config.camera.frontview_center[0],
             center_elev=config.camera.frontview_center[1],
             std=config.camera.frontview_std,
@@ -161,6 +161,9 @@ def segment(
     # Segment
     predictions, _ = segmenter()
     predictions = torch.tensor(predictions)
+
+    predictions_np = predictions.cpu().numpy()
+    # return predictions_np
 
     # Save the predictions
     np.save(os.path.join(output_dir, "raw_face_preds.npy"), predictions.cpu().numpy())

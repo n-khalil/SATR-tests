@@ -13,12 +13,15 @@ class SAMModel:
         self.model = SamPredictor(self.sam)
 
     def predict(self, bbox, multimask_output=False):
-        masks, _, _ = self.model.predict(
-        point_coords=None,
-        point_labels=None,
-        box=bbox[None, :],
-        multimask_output=multimask_output)
-        return masks
+        masks, scores, _ = self.model.predict(
+            point_coords=None,
+            point_labels=None,
+            box=bbox[None, :],
+            multimask_output=multimask_output
+        )
+        if (multimask_output==False):
+            masks = masks.squeeze()
+        return masks, scores
 
     def set_img(self, img):
         self.model.set_image(img)

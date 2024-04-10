@@ -16,7 +16,6 @@ import cv2
 from ..models.GLIP.glip import GLIPModel
 from ..models.SAM.sam import SAMModel
 
-
 class BaseMeshSegmentor:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -42,7 +41,6 @@ class BaseMeshSegmentor:
         output_mesh.visual.face_colors = face_colors.cpu().numpy()
         scene.add_geometry(output_mesh, node_name="output")
         _ = scene.export(output_filename)
-
 
 class BaseDetMeshSegmentor(BaseMeshSegmentor):
     def __init__(self, cfg):
@@ -78,6 +76,10 @@ class BaseDetMeshSegmentor(BaseMeshSegmentor):
                 if face_id == -1:
                     continue
                 relevant_face_ids[face_id] += 1
+        
+        # my_face_counter = pixel_face_ids[row_min:row_max, col_min:col_max].cpu().numpy()
+        # my_face_counter = my_face_counter[my_face_counter != -1]
+        # my_relevant_face_ids = dict(Counter(list(my_face_counter)))
 
         for k, _ in face_counter.items():
             if k == -1:
@@ -87,130 +89,65 @@ class BaseDetMeshSegmentor(BaseMeshSegmentor):
 
         return relevant_face_ids, non_relevant_face_ids
 
-    def process_box_predictions(self, prompt, preds, rendering_face_ids):
-        # Initialize a score vector for each face in the mesh for the given region prompt (e.g. "the leg of a person").
-        face_view_prompt_score = np.zeros((len(self.mesh.faces)))
-        face_view_freq = np.zeros((len(self.mesh.faces)))
+    def get_included_face_ids_from_mask(self, pixel_face_ids, mask, bbox, face_counter):
+        relevant_face_ids = defaultdict(int)
+        non_relevant_face_ids = defaultdict(int)
 
-        pred_bboxes = preds[0][1]
-        pred_bboxes_cor = preds[0][1].bbox
-        n_boxes = len(
-            pred_bboxes
-        )  # The number of predcited bounding boxes for the given prompt (e.g., the leg of a person).
+        bbox = bbox.to(torch.int64)
+        (col_min, row_min), (col_max, row_max) = (
+            bbox[:2].tolist(),
+            bbox[2:].tolist(),
+        )
 
-        face_counter = rendering_face_ids.flatten().cpu().int().numpy()
-        face_counter = face_counter[face_counter != -1]
-        face_counter = Counter(list(face_counter))
+        for col in range(col_min, col_max):
+            for row in range(row_min, row_max):
+                if (mask[row][col]):
+                    face_id = pixel_face_ids[row][col].item()
+                    if face_id == -1:
+                        continue
+                    relevant_face_ids[face_id] += 1
 
-        for i in range(n_boxes):
-            if pred_bboxes.get_field("labels")[i].item() != 1 and "of" in prompt:
+        for k, _ in face_counter.items():
+            if k == -1:
                 continue
+            if k not in relevant_face_ids:
+                non_relevant_face_ids[k] += 1
 
-            confidence_score = pred_bboxes.get_field("scores")[i].item()
+        return relevant_face_ids, non_relevant_face_ids
+        
+    # def process_box_predictions(self, prompt, preds, rendering_face_ids):
+    #     # Initialize a score vector for each face in the mesh for the given region prompt (e.g. "the leg of a person").
+    #     face_view_prompt_score = np.zeros((len(self.mesh.faces)))
+    #     face_view_freq = np.zeros((len(self.mesh.faces)))
 
-            # Get the included face ids inside this bounding box
-            included_face_ids, not_included_face_ids = self.get_included_face_ids(
-                rendering_face_ids, pred_bboxes_cor[i], face_counter
-            )
+    #     pred_bboxes = preds[0][1]
+    #     pred_bboxes_cor = preds[0][1].bbox
+    #     n_boxes = len(
+    #         pred_bboxes
+    #     )  # The number of predcited bounding boxes for the given prompt (e.g., the leg of a person).
 
-            for k, v in included_face_ids.items():
-                face_view_prompt_score[k] += v * confidence_score
+    #     face_counter = rendering_face_ids.flatten().cpu().int().numpy()
+    #     face_counter = face_counter[face_counter != -1]
+    #     face_counter = Counter(list(face_counter))
 
-        return face_view_prompt_score, face_view_freq
+    #     for i in range(n_boxes):
+    #         if pred_bboxes.get_field("labels")[i].item() != 1 and "of" in prompt:
+    #             continue
+
+    #         confidence_score = pred_bboxes.get_field("scores")[i].item()
+
+    #         # Get the included face ids inside this bounding box
+    #         included_face_ids, not_included_face_ids = self.get_included_face_ids(
+    #             rendering_face_ids, pred_bboxes_cor[i], face_counter
+    #         )
+
+    #         for k, v in included_face_ids.items():
+    #             face_view_prompt_score[k] += v * confidence_score
+
+    #     return face_view_prompt_score, face_view_freq
 
     def __call__(self):
         pass
-
-
-class GLIPMeshSegmenter(BaseDetMeshSegmentor):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-
-        self.glip_model = GLIPModel()
-
-    def predict_face_cls(self):
-        # Get the bounding boxes predictions for the given prompts
-        self.predict_bboxes()
-        assert self.bbox_predictions is not None
-        print(f"Finished GLIP")
-
-        face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
-        face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
-
-        # Looping over the views
-        for i, view in tqdm(enumerate(self.rendered_images)):
-            for j, prompt in enumerate(self.prompts):
-                print(f'Processing view: {i}, Prompt: {j}')
-                (
-                    face_view_prompt_score,
-                    face_view_prompt_freq,
-                ) = self.process_box_predictions(
-                    prompt,
-                    self.bbox_predictions[i][prompt],
-                    self.rendered_images_face_ids[i].squeeze(0),
-                )
-                face_cls[:, j] += face_view_prompt_score
-                face_freq[:, j] += face_view_prompt_freq
-
-        return face_cls, face_freq
-
-    def predict_bboxes(self):
-        # Generate GLIP predictions for every rendered image
-        print("Feeding the views to GLIP...")
-        self.bbox_predictions = []
-        num_views = len(self.rendered_images)
-
-        # fig, axs = plt.subplots(2,5,figsize=(80,22))
-        fig, axs = plt.subplots(3,4,figsize=(80,22))
-
-        colors_dict = {
-            0: [255, 0, 0],   # Red
-            1: [0, 255, 0],   # Green
-            2: [0, 0, 255],   # Blue
-            3: [255, 255, 0],   # Yellow
-            4: [255, 0, 255],   # Magenta
-            5: [0, 255, 255],   # Cyan
-            6: [128, 0, 0], # Dark Red
-            7: [0, 128, 0], # Dark Green
-            8: [0, 0, 128], # Dark Blue
-            9: [128, 128, 128] # Gray
-        }
-
-        for i in range(len(self.rendered_images)):
-            self.bbox_predictions.append({})
-
-            img = self.rendered_images[i].permute([1, 2, 0]) * 256.0
-            img = img.to(torch.uint8)
-            img_to_show = img.cpu().numpy().copy()
-            ax = axs[i // 4, i % 4]
-            for p_idx, p in enumerate(self.prompts):
-                print('View number:', i, 'Prompt:', p_idx, end=' ')
-                
-                res = self.glip_model.predict(img.cpu().numpy(), p)
-                
-                num_bboxes = len(res[1].bbox)
-
-                for bbox_idx in range(num_bboxes):
-                    startX = int(res[1].bbox[bbox_idx][0].item())
-                    startY = int(res[1].bbox[bbox_idx][1].item())
-                    endX = int(res[1].bbox[bbox_idx][2].item())
-                    endY = int(res[1].bbox[bbox_idx][3].item())
-                    cv2.rectangle(img_to_show, (startX, startY), (endX, endY), colors_dict[p_idx], 2)
-                    score = res[1].get_field('scores')[bbox_idx].item()
-                    cv2.putText(img_to_show, p + " " + str(score), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, colors_dict[p_idx], 2)
-                
-                self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
-            
-            ax.imshow(img_to_show)
-        plt.show()
-
-    def __call__(self):
-        assert self.glip_model is not None
-        assert self.rendered_images is not None
-
-        return self.predict_face_cls()
-    
-
 
 class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
     def __init__(self, cfg):
@@ -237,7 +174,10 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         self.predict_bboxes()
         assert self.bbox_predictions is not None
         print(f"Finished GLIP")
-        # self.predict_exact_masks()
+
+        if self.cfg.satr.sam:
+            self.predict_exact_masks()
+            print('Finished SAM')
 
         face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
         face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
@@ -246,14 +186,26 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         for i, view in tqdm(enumerate(self.rendered_images)):
             for j, prompt in enumerate(self.prompts):
                 print(f'Processing view: {i}, Prompt: {j}')
-                (
-                    face_view_prompt_score,
-                    face_view_prompt_freq,
-                ) = self.process_box_predictions(
-                    prompt,
-                    self.bbox_predictions[i][prompt],
-                    self.rendered_images_face_ids[i].squeeze(0),
-                )
+                if self.cfg.satr.sam:
+                    (
+                        face_view_prompt_score,
+                        face_view_prompt_freq,
+                    ) = self.process_masks_predictions(
+                        prompt,
+                        self.masks_predictions[i][prompt],
+                        self.bbox_predictions[i][prompt][0][1],
+                        self.rendered_images_face_ids[i].squeeze(0),
+                    )
+                else:
+                    (
+                        face_view_prompt_score,
+                        face_view_prompt_freq,
+                    ) = self.process_box_predictions(
+                        prompt,
+                        self.bbox_predictions[i][prompt],
+                        self.rendered_images_face_ids[i].squeeze(0),
+                    )
+
                 face_cls[:, j] += face_view_prompt_score
                 face_freq[:, j] += face_view_prompt_freq
 
@@ -267,6 +219,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
 
         # fig, axs = plt.subplots(2,5,figsize=(80,22))
         fig, axs = plt.subplots(3,4,figsize=(80,22))
+        # fig, axs = plt.subplots(1,2,figsize=(80,22))
 
         for i in range(len(self.rendered_images)):
             self.bbox_predictions.append({})
@@ -276,50 +229,70 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             img = img.to(torch.uint8)
             img_to_show = img.cpu().numpy().copy()
             ax = axs[i // 4, i % 4]
-            for p_idx, p in enumerate(self.prompts):
-                print('View number:', i, 'Prompt:', p_idx, end=' ')
+            # ax = axs[i]
+            for p_id, p in enumerate(self.prompts):
+                print('GLIP - View:', i, 'Prompt:', p_id, end=' ')
                 
                 res = self.glip_model.predict(img.cpu().numpy(), p)
                 num_bboxes = len(res[1].bbox)
 
-                for bbox_idx in range(num_bboxes):
-                    # print(res[1].bbox[bbox_idx][0].item())
-                    startX = int(res[1].bbox[bbox_idx][0].item())
-                    startY = int(res[1].bbox[bbox_idx][1].item())
-                    endX = int(res[1].bbox[bbox_idx][2].item())
-                    endY = int(res[1].bbox[bbox_idx][3].item())
-                    cv2.rectangle(img_to_show, (startX, startY), (endX, endY), self.colors_dict[p_idx], 2)
-                    score = res[1].get_field('scores')[bbox_idx].item()
-                    cv2.putText(img_to_show, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_idx], 2)
+                # Showboundin boxes
+                for bbox_id in range(num_bboxes):
+                    # print(res[1].bbox[bbox_id][0].item())
+                    startX = int(res[1].bbox[bbox_id][0].item())
+                    startY = int(res[1].bbox[bbox_id][1].item())
+                    endX = int(res[1].bbox[bbox_id][2].item())
+                    endY = int(res[1].bbox[bbox_id][3].item())
+                    cv2.rectangle(img_to_show, (startX, startY), (endX, endY), self.colors_dict[p_id], 2)
+                    score = res[1].get_field('scores')[bbox_id].item()
+                    cv2.putText(img_to_show, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_id], 2)
                 
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
             ax.imshow(img_to_show)
         plt.show()
-
     
     def predict_exact_masks(self):
-        num_views = len(self.rendered_images)
+        print("Feeding the bouning boxes to SAM...")
+        
+        self.masks_predictions = []
         fig, axs = plt.subplots(3, 4, figsize=(80,22))
-        for i in range(num_views):
-            img = (self.rendered_images[i].permute([1, 2, 0]) * 256.0).to(torch.uint8).cpu().numpy().copy()
+        # fig, axs = plt.subplots(1, 2, figsize=(80,22))
+
+        for i in range(len(self.rendered_images)):
+            self.masks_predictions.append({})
+            
+            img = (self.rendered_images[i].permute([1, 2, 0]) * 255.0).to(torch.uint8).cpu().numpy().copy()
             self.sam_model.set_img(img)
             ax = axs[i // 4, i % 4]
+            # ax = axs[i]
             ax.imshow(img)
-            for p_idx in range(len(self.prompts)):
-                p = self.prompts[p_idx]
-                res = self.bbox_predictions[i][p][0]
-                num_bboxes = len(res[1].bbox)
-                for bbox_idx in range(num_bboxes):
-                    startX = int(res[1].bbox[bbox_idx][0].item())
-                    startY = int(res[1].bbox[bbox_idx][1].item())
-                    endX = int(res[1].bbox[bbox_idx][2].item())
-                    endY = int(res[1].bbox[bbox_idx][3].item())
-                    cv2.rectangle(img, (startX, startY), (endX, endY), self.colors_dict[p_idx], 2)
-                    masks = self.sam_model.predict(np.array([startX, startY, endX, endY]))
-                    self.show_mask(masks[0], ax, np.array(self.colors_dict[p_idx]) / 255.0)
-        plt.show()
+            
+            for p_id, p in enumerate(self.prompts):
+                print('SAM - View:', i, 'Prompt:', p_id)
+    
+                glip_res = self.bbox_predictions[i][p][0]
+                num_bboxes = len(glip_res[1].bbox)
 
+                masks = []
+                # Predict and Show masks
+                print('Num bboxes:', num_bboxes)
+                for bbox_id in range(num_bboxes):
+                    startX = int(glip_res[1].bbox[bbox_id][0].item())
+                    startY = int(glip_res[1].bbox[bbox_id][1].item())
+                    endX = int(glip_res[1].bbox[bbox_id][2].item())
+                    endY = int(glip_res[1].bbox[bbox_id][3].item())
+                    cv2.rectangle(img, (startX, startY), (endX, endY), self.colors_dict[p_id], 2)
+                    box = np.array([startX, startY, endX, endY])
+                    mask, score = self.sam_model.predict(
+                        bbox=box,
+                        multimask_output=False,
+                    )
+                    # score *= glip_res[1].get_field('scores')[bbox_id].item()
+                    self.show_mask(mask, ax, np.array(self.colors_dict[p_id]) / 255.0)
+                    masks.append((mask, score))
+            self.masks_predictions[i][p] = masks
+        plt.show()
 
     def show_mask(self, mask, ax, input_color = None, random_color=False):
         if random_color:
@@ -338,15 +311,13 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         # ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))
         ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor=color, facecolor=(0,0,0,0), lw=2))
 
-
     def __call__(self):
         assert self.glip_model is not None
         assert self.rendered_images is not None
 
         return self.predict_face_cls()
 
-
-class SATR(GLIPMeshSegmenter):
+class SATRSAM(GLIPSAMMeshSegmenter):
     def __init__(self, cfg):
         super().__init__(cfg)
 
@@ -521,6 +492,52 @@ class SATR(GLIPMeshSegmenter):
                 rendering_face_ids, pred_bboxes_cor[i], face_counter
             )
 
+
+            # Compute the reweighting factors
+            self.preprocessing_step_reweighting_factors(
+                included_face_ids,
+            )
+            reweighting_factors = self.compute_reweighting_factors(included_face_ids)
+
+            for k, v in included_face_ids.items():
+                final_factor = 1.0
+
+                for f in list(reweighting_factors.values()):
+                    final_factor *= f[k]
+
+                face_view_prompt_score[k] += v * confidence_score * final_factor
+
+        return face_view_prompt_score, face_view_freq
+    
+    def process_masks_predictions(self, prompt, pred_masks, pred_bboxes, rendering_face_ids):
+        
+        #pred_masks is a list of tuples. Each tuple correspnds to one mask. 
+        #First is a res*res array representing the mask, second is float representing the score
+
+        # Initialize a score vector for each face in the mesh for the given region prompt (e.g. "the leg of a person").
+        face_view_prompt_score = np.zeros((len(self.mesh.faces)))
+        face_view_freq = np.zeros((len(self.mesh.faces)))
+
+
+        n_masks = len(
+            pred_masks
+        )  # The number of predcited bounding boxes for the given prompt (e.g., the leg of a person).
+
+        face_counter = rendering_face_ids.flatten().cpu().int().numpy()
+        face_counter = face_counter[face_counter != -1]
+        face_counter = Counter(list(face_counter))
+
+        # Traverse masks 
+        for i in range(n_masks):
+            if pred_bboxes.get_field("labels")[i].item() != 1 and "of" in prompt:
+                continue
+            confidence_score = pred_masks[i][1] * pred_bboxes.get_field('scores')[i].item()
+
+            # Get the included face ids inside this bounding box
+            included_face_ids, not_included_face_ids = self.get_included_face_ids_from_mask(
+                rendering_face_ids, pred_masks[i][0], pred_bboxes.bbox[i], face_counter
+            )
+
             # Compute the reweighting factors
             self.preprocessing_step_reweighting_factors(
                 included_face_ids,
@@ -537,8 +554,96 @@ class SATR(GLIPMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
 
+class GLIPMeshSegmenter(BaseDetMeshSegmentor):
+    def __init__(self, cfg):
+        super().__init__(cfg)
 
-class SATRSAM(GLIPSAMMeshSegmenter):
+        self.glip_model = GLIPModel()
+
+    def predict_face_cls(self):
+        # Get the bounding boxes predictions for the given prompts
+        self.predict_bboxes()
+        assert self.bbox_predictions is not None
+        print(f"Finished GLIP")
+
+        face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
+        face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
+
+        # Looping over the views
+        for i, view in tqdm(enumerate(self.rendered_images)):
+            for j, prompt in enumerate(self.prompts):
+                print(f'Processing view: {i}, Prompt: {j}')
+                (
+                    face_view_prompt_score,
+                    face_view_prompt_freq,
+                ) = self.process_box_predictions(
+                    prompt,
+                    self.bbox_predictions[i][prompt],
+                    self.rendered_images_face_ids[i].squeeze(0),
+                )
+
+                face_cls[:, j] += face_view_prompt_score
+                face_freq[:, j] += face_view_prompt_freq
+
+        return face_cls, face_freq
+
+    def predict_bboxes(self):
+        # Generate GLIP predictions for every rendered image
+        print("Feeding the views to GLIP...")
+        self.bbox_predictions = []
+        num_views = len(self.rendered_images)
+
+        # fig, axs = plt.subplots(2,5,figsize=(80,22))
+        fig, axs = plt.subplots(3,4,figsize=(80,22))
+
+        colors_dict = {
+            0: [255, 0, 0],   # Red
+            1: [0, 255, 0],   # Green
+            2: [0, 0, 255],   # Blue
+            3: [255, 255, 0],   # Yellow
+            4: [255, 0, 255],   # Magenta
+            5: [0, 255, 255],   # Cyan
+            6: [128, 0, 0], # Dark Red
+            7: [0, 128, 0], # Dark Green
+            8: [0, 0, 128], # Dark Blue
+            9: [128, 128, 128] # Gray
+        }
+
+        for i in range(len(self.rendered_images)):
+            self.bbox_predictions.append({})
+
+            img = self.rendered_images[i].permute([1, 2, 0]) * 256.0
+            img = img.to(torch.uint8)
+            img_to_show = img.cpu().numpy().copy()
+            ax = axs[i // 4, i % 4]
+            for p_idx, p in enumerate(self.prompts):
+                print('View number:', i, 'Prompt:', p_idx, end=' ')
+                
+                res = self.glip_model.predict(img.cpu().numpy(), p)
+                
+                num_bboxes = len(res[1].bbox)
+
+                for bbox_idx in range(num_bboxes):
+                    startX = int(res[1].bbox[bbox_idx][0].item())
+                    startY = int(res[1].bbox[bbox_idx][1].item())
+                    endX = int(res[1].bbox[bbox_idx][2].item())
+                    endY = int(res[1].bbox[bbox_idx][3].item())
+                    cv2.rectangle(img_to_show, (startX, startY), (endX, endY), colors_dict[p_idx], 2)
+                    score = res[1].get_field('scores')[bbox_idx].item()
+                    cv2.putText(img_to_show, p + " " + str(score), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, colors_dict[p_idx], 2)
+                
+                self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
+            
+            ax.imshow(img_to_show)
+        plt.show()
+
+    def __call__(self):
+        assert self.glip_model is not None
+        assert self.rendered_images is not None
+
+        return self.predict_face_cls()
+
+class SATR(GLIPMeshSegmenter):
     def __init__(self, cfg):
         super().__init__(cfg)
 
