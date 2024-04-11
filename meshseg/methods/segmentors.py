@@ -289,7 +289,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         multimask_output=False,
                     )
                     # score *= glip_res[1].get_field('scores')[bbox_id].item()
-                    self.show_mask(mask, ax, np.array(self.colors_dict[p_id]) / 255.0)
+                    if ('mattress' in p and glip_res[1].get_field('labels')[bbox_id] == 1):
+                        self.show_mask(mask, ax, np.array(self.colors_dict[p_id]) / 255.0)
                     masks.append((mask, score))
                 self.masks_predictions[i][p] = masks
         plt.show()
@@ -537,7 +538,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             included_face_ids, not_included_face_ids = self.get_included_face_ids_from_mask(
                 rendering_face_ids, pred_masks[i][0], pred_bboxes.bbox[i], face_counter
             )
-            # print(len(included_face_ids))
+
             if(len(included_face_ids) == 0):
                 continue
 
