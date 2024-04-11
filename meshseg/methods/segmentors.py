@@ -238,7 +238,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
 
                 # Showboundin boxes
                 for bbox_id in range(num_bboxes):
-                    # print(res[1].bbox[bbox_id][0].item())
+                    # if res[1].get_field("labels")[bbox_id] != 1 and 'of' in p:
+                    #     continue
                     startX = int(res[1].bbox[bbox_id][0].item())
                     startY = int(res[1].bbox[bbox_id][1].item())
                     endX = int(res[1].bbox[bbox_id][2].item())
@@ -276,7 +277,6 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
 
                 masks = []
                 # Predict and Show masks
-                print('Num bboxes:', num_bboxes)
                 for bbox_id in range(num_bboxes):
                     startX = int(glip_res[1].bbox[bbox_id][0].item())
                     startY = int(glip_res[1].bbox[bbox_id][1].item())
@@ -291,7 +291,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                     # score *= glip_res[1].get_field('scores')[bbox_id].item()
                     self.show_mask(mask, ax, np.array(self.colors_dict[p_id]) / 255.0)
                     masks.append((mask, score))
-            self.masks_predictions[i][p] = masks
+                self.masks_predictions[i][p] = masks
         plt.show()
 
     def show_mask(self, mask, ax, input_color = None, random_color=False):
@@ -537,6 +537,9 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             included_face_ids, not_included_face_ids = self.get_included_face_ids_from_mask(
                 rendering_face_ids, pred_masks[i][0], pred_bboxes.bbox[i], face_counter
             )
+            # print(len(included_face_ids))
+            if(len(included_face_ids) == 0):
+                continue
 
             # Compute the reweighting factors
             self.preprocessing_step_reweighting_factors(
