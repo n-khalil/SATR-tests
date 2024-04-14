@@ -120,11 +120,13 @@ def segment(
     else:
         background = torch.tensor(config.background).to(device)
 
-    if "camera.random_rendering" in config:
-        random_rendering = config.random_rendering
+    if "random_rendering" in config.camera:
+        random_rendering = config.camera.random_rendering
+        
     else:
         random_rendering = False
     
+    print('Random rendering:', random_rendering)
     with torch.no_grad():
         print(f"Rendering the views...")
         elev = None
@@ -135,7 +137,7 @@ def segment(
             2,
             mesh,
             num_views=config.camera.n_views,
-            show=False,
+            show=True,
             center_azim=config.camera.frontview_center[0],
             center_elev=config.camera.frontview_center[1],
             std=config.camera.frontview_std,
@@ -148,6 +150,7 @@ def segment(
             random_rendering=random_rendering
         )
         print(f"Rendering the views...done")
+    return
     #
     # Segmentation
     #

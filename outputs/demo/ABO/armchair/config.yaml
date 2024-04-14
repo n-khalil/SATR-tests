@@ -9,9 +9,15 @@ satr:
   face_smoothing: true
   face_smoothing_n_ring: 5
 camera:
-  n_views: 10
+  n_views: 12
   frontview_std: 4
   frontview_center:
   - 3.14
   - 0.0
   render_res: 1024
+  random_rendering: true
+color: vertex normals
+background:
+- 255.0
+- 255.0
+- 255.0

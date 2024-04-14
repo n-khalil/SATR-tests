@@ -196,15 +196,16 @@ class Renderer:
                 # fig, axs = plt.subplots(
                 #     1 + (num_views - 1) // 4, min(4, num_views), figsize=(89.6, 22.4)
                 # )
-                fig, axs = plt.subplots(2,5,figsize=(80,22))
+                # fig, axs = plt.subplots(3,4,figsize=(80,22))
+                fig, axs = plt.subplots(3,4,figsize=(30,22))
                 for i in range(num_views):
                     if num_views == 1:
                         ax = axs
                     elif num_views <= 4:
                         ax = axs[i]
                     else:
-                        # ax = axs[i // 4, i % 4]
-                        ax = axs[i // 5, i % 5]
+                        ax = axs[i // 4, i % 4]
+                        # ax = axs[i // 5, i % 5]
                     ax.imshow(images[i].permute(1, 2, 0).cpu().numpy())
                 plt.show()
 
