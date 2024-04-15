@@ -218,7 +218,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         num_views = len(self.rendered_images)
 
         # fig, axs = plt.subplots(2,5,figsize=(80,22))
-        fig, axs = plt.subplots(3,4,figsize=(80,22))
+        fig, axs = plt.subplots(3,4,figsize=(30,22))
         # fig, axs = plt.subplots(1,2,figsize=(80,22))
 
         for i in range(len(self.rendered_images)):
@@ -257,7 +257,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         print("Feeding the bouning boxes to SAM...")
         
         self.masks_predictions = []
-        fig, axs = plt.subplots(3, 4, figsize=(80,22))
+        fig, axs = plt.subplots(3, 4, figsize=(30,22))
         # fig, axs = plt.subplots(1, 2, figsize=(80,22))
 
         for i in range(len(self.rendered_images)):

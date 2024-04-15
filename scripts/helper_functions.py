@@ -137,7 +137,7 @@ def segment(
             2,
             mesh,
             num_views=config.camera.n_views,
-            show=True,
+            show=False,
             center_azim=config.camera.frontview_center[0],
             center_elev=config.camera.frontview_center[1],
             std=config.camera.frontview_std,
@@ -150,7 +150,6 @@ def segment(
             random_rendering=random_rendering
         )
         print(f"Rendering the views...done")
-    return
     #
     # Segmentation
     #
