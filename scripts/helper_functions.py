@@ -122,7 +122,6 @@ def segment(
 
     if "random_rendering" in config.camera:
         random_rendering = config.camera.random_rendering
-        
     else:
         random_rendering = False
     

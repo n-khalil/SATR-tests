@@ -338,10 +338,16 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         self.get_faces_neighborhood()
         print(f"Sampling points on surface")
         self.sample_mesh()
-        print(f"Computing point cloud pairwise distances")
-        self.compute_pt_cloud_pairwise_dist()
-        # print(f"Computing vertices pairwise distances")
-        # self.compute_vertices_pairwise_dist()
+        if ('geodesic_from_point_cloud' in self.config.satr):
+            self.geodesic_from_point_cloud = self.config.satr.geodesic_from_point_cloud
+        else:
+            self.geodesic_from_point_cloud = True
+        if (self.geodesic_from_point_cloud):
+            print(f"Computing point cloud pairwise distances")
+            self.compute_pt_cloud_pairwise_dist()
+        else:
+            print(f"Computing vertices pairwise distances")
+            self.compute_vertices_pairwise_dist()
 
     def get_faces_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
@@ -390,18 +396,19 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         capital_face_center = faces_center.sum(dim=0) / visible_face_areas.sum(dim=0)
 
-        # Find the nearest vertex to the capital_face_center
-        # distances = cdist(
-        #     self.mesh.vertices[visible_vertices_ids].cpu().numpy(),
-        #     capital_face_center.cpu().view(1, 3).numpy(),
-        # )
+        if(self.geodesic_from_point_cloud):
+            # Find the nearest sample point to the capital_face_center
+            _, capital_sample_pt_ind = self.closest_point_in_pt_cloud_from_vertex(
+                capital_face_center.cpu().view(1,-1).numpy())
+        else:
+            # Find the nearest vertex to the capital_face_center
+            distances = cdist(
+                self.mesh.vertices[visible_vertices_ids].cpu().numpy(),
+                capital_face_center.cpu().view(1, 3).numpy(),
+            )
+            nearest_vert_ind = np.argmin(distances[:, 0])
+            nearest_vert_id = visible_vertices_ids[nearest_vert_ind]
 
-        # nearest_vert_ind = np.argmin(distances[:, 0])
-        # nearest_vert_id = visible_vertices_ids[nearest_vert_ind]
-
-        # Find the nearest sample point to the capital_face_center
-        _, capital_sample_pt_ind = self.closest_point_in_pt_cloud_from_vertex(
-            capital_face_center.cpu().view(1,-1).numpy())
 
         # Now compute the distance from this vertex (representing the capital face on the mesh) 
         # to each face found in faces_dict
@@ -409,12 +416,14 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         distances = []
 
         for k, _ in faces_dict.items():
-            # face_vert = self.mesh.faces[k][0].cpu().numpy()
-            # distances.append(self.vertices_distances[face_vert, nearest_vert_id])
-            # faces_distance[k] = self.vertices_distances[face_vert, nearest_vert_id]
-            _, face_sample_point_ind = self.closest_point_in_pt_cloud_from_face(self.mesh.faces[k].cpu().numpy())
-            distances.append(self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind])
-            faces_distance[k] = self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind]
+            if (self.geodesic_from_point_cloud):
+                _, face_sample_point_ind = self.closest_point_in_pt_cloud_from_face(self.mesh.faces[k].cpu().numpy())
+                distances.append(self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind])
+                faces_distance[k] = self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind]
+            else:
+                face_vert = self.mesh.faces[k][0].cpu().numpy()
+                distances.append(self.vertices_distances[face_vert, nearest_vert_id])
+                faces_distance[k] = self.vertices_distances[face_vert, nearest_vert_id]
 
         distances = np.array(distances)
         mean = np.mean(distances)
@@ -424,8 +433,10 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         faces_distance_factor = {}
         for k, v in faces_dict.items():
             faces_distance_factor[k] = g.pdf(faces_distance[k])
-
-        return faces_distance_factor, capital_sample_pt_ind
+        if (self.geodesic_from_point_cloud):
+            return faces_distance_factor, capital_sample_pt_ind
+        else:
+            return faces_distance_factor, nearest_vert_id
 
     def compute_vertices_pairwise_dist(self):
         n_vertices = len(self.mesh.vertices)
