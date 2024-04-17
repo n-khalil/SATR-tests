@@ -449,13 +449,24 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.pt_cloud_distances[:, i] = x
         
         # np.random.seed(2023)
-        rand_pt = np.random.randint(n_samples)
-        p = mp.plot(self.point_cloud, 
-                    c = self.pt_cloud_distances[:, rand_pt], shading={'point_size':0.2},
-                    return_plot=True)
-        p.add_points(self.point_cloud[rand_pt].reshape(1,-1), 
-                    shading={'point_color':'red', 'point_size':0.7})
+        # rand_pt = np.random.randint(n_samples)
+        # p = mp.plot(self.point_cloud, 
+        #             c = self.pt_cloud_distances[:, rand_pt], shading={'point_size':0.2},
+        #             return_plot=True)
+        # p.add_points(self.point_cloud[rand_pt].reshape(1,-1), 
+        #             shading={'point_color':'red', 'point_size':0.7})
 
+    def closest_point_in_pt_cloud_from_vertex(self, vertex):
+        # Find the closest point in point cloud to the given vertex
+        distances = cdist(
+            self.point_cloud,
+            vertex,
+        )
+        closest_pt_ind = np.argmin(distances[:, 0])
+        return self.point_cloud[closest_pt_ind]
+
+    def closest_point_in_pt_cloud_from_face(self, face):
+        pass
 
     def preprocessing_step_reweighting_factors(self, included_face_ids):
         if self.cfg.satr.gaussian_reweighting:
