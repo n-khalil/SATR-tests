@@ -3,15 +3,14 @@ backend: satr+glip
 backend_type: detection_based
 dataset_dir: "data/demo"
 
-# region_names: "['cover', 'binding', 'pages', 'elastic band']"
-region_names: "['cover', 'pages']"
-object_class: "notebook"
+region_names: "['top', 'sides', 'shelves', 'back panel', 'bottom']"
+object_class: "bookshelf"
 
 satr:
   gaussian_reweighting: true
   face_smoothing: true
   face_smoothing_n_ring: 5
-  sam: false
+  sam: true
 
 camera:
   n_views: 10
@@ -19,6 +18,6 @@ camera:
   frontview_center: [3.14, 0.0]
   render_res: 1024
 
-background: [255., 255., 255.]
+# color: "vertex normals"
 
-color: "vertex normals"
+background: [255.0, 255.0, 255.0]

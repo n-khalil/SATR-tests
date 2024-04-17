@@ -236,10 +236,10 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                 res = self.glip_model.predict(img.cpu().numpy(), p)
                 num_bboxes = len(res[1].bbox)
 
-                # Showboundin boxes
+                # Show bounding boxes
                 for bbox_id in range(num_bboxes):
-                    # if res[1].get_field("labels")[bbox_id] != 1 and 'of' in p:
-                    #     continue
+                    if res[1].get_field("labels")[bbox_id] != 1 and 'of' in p:
+                        continue
                     startX = int(res[1].bbox[bbox_id][0].item())
                     startY = int(res[1].bbox[bbox_id][1].item())
                     endX = int(res[1].bbox[bbox_id][2].item())
