@@ -159,7 +159,7 @@ def segment(
     segmenter.set_mesh(mesh)
     segmenter.set_prompts(prompts)
     segmenter.set_rendered_views(rendered_images, faces_idx)
-
+    return
     # Segment
     predictions, _ = segmenter()
     predictions = torch.tensor(predictions)

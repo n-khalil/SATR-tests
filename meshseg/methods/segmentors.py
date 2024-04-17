@@ -16,6 +16,8 @@ import cv2
 from ..models.GLIP.glip import GLIPModel
 from ..models.SAM.sam import SAMModel
 
+import meshplot as mp
+
 class BaseMeshSegmentor:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -334,6 +336,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         print(f"Getting faces neighborhood")
         self.get_faces_neighborhood()
+        print(f"Sampling points on surface")
+        self.sample_mesh()
         print(f"Computing vertices pairwise distances")
         self.compute_vertices_pairwise_dist()
 
@@ -425,7 +429,14 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         for i in range(n_vertices):
             x = solver.compute_distance(i)
             self.vertices_distances[:, i] = x
-
+        
+        np.random.seed(42)
+        rand_pt = np.random.randint(self.mesh.vertices.shape[0])
+        # p = mp.plot(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy(),
+        #          c = self.vertices_distances[:, rand_pt], return_plot=True)
+        # p.add_points(self.mesh.vertices[rand_pt].view(1, -1).cpu().numpy(), 
+        #             shading={'point_color':'red', 'point_size':1})
+        
     def preprocessing_step_reweighting_factors(self, included_face_ids):
         if self.cfg.satr.gaussian_reweighting:
             (
@@ -557,3 +568,11 @@ class SATRSAM(GLIPSAMMeshSegmenter):
                 face_view_prompt_score[k] += v * confidence_score * final_factor
 
         return face_view_prompt_score, face_view_freq
+    
+    def sample_mesh(self):
+        n_samples = int(self.mesh.vertices.shape[0] * 2)
+        trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
+        self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
+        p = mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
+
+
