@@ -342,6 +342,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         self.compute_pt_cloud_pairwise_dist()
         # print(f"Computing vertices pairwise distances")
         # self.compute_vertices_pairwise_dist()
+      
 
     def get_faces_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
@@ -460,13 +461,18 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         # Find the closest point in point cloud to the given vertex
         distances = cdist(
             self.point_cloud,
-            vertex,
+            vertex.reshape(1,-1),
         )
         closest_pt_ind = np.argmin(distances[:, 0])
         return self.point_cloud[closest_pt_ind]
 
     def closest_point_in_pt_cloud_from_face(self, face):
-        pass
+        face.squeeze()
+        v0 = self.mesh.vertices[face[0]].cpu().numpy()
+        v1 = self.mesh.vertices[face[1]].cpu().numpy()
+        v2 = self.mesh.vertices[face[2]].cpu().numpy()
+        face_center = (v0 + v1 + v2) / 3.0
+        return self.closest_point_in_pt_cloud_from_vertex(face_center)
 
     def preprocessing_step_reweighting_factors(self, included_face_ids):
         if self.cfg.satr.gaussian_reweighting:
