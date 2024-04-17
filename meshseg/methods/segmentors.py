@@ -569,8 +569,9 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
-    def sample_mesh(self):
-        n_samples = int(self.mesh.vertices.shape[0] * 2)
+    def sample_mesh(self, n_samples=None):
+        if (n_samples == None):
+            n_samples = int(self.mesh.vertices.shape[0] * 2)
         trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
         self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
         p = mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
