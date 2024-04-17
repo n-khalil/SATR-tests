@@ -338,8 +338,10 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         self.get_faces_neighborhood()
         print(f"Sampling points on surface")
         self.sample_mesh()
-        print(f"Computing vertices pairwise distances")
-        self.compute_vertices_pairwise_dist()
+        print(f"Computing point cloud pairwise distances")
+        self.compute_pt_cloud_pairwise_dist()
+        # print(f"Computing vertices pairwise distances")
+        # self.compute_vertices_pairwise_dist()
 
     def get_faces_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
@@ -430,13 +432,31 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             x = solver.compute_distance(i)
             self.vertices_distances[:, i] = x
         
-        np.random.seed(42)
-        rand_pt = np.random.randint(self.mesh.vertices.shape[0])
+        # np.random.seed(42)
+        # rand_pt = np.random.randint(self.mesh.vertices.shape[0])
         # p = mp.plot(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy(),
         #          c = self.vertices_distances[:, rand_pt], return_plot=True)
         # p.add_points(self.mesh.vertices[rand_pt].view(1, -1).cpu().numpy(), 
         #             shading={'point_color':'red', 'point_size':1})
+
+    def compute_pt_cloud_pairwise_dist(self):
+        n_samples = self.point_cloud.shape[0]
+
+        self.pt_cloud_distances = np.zeros((n_samples, n_samples))
+        solver = pp3d.PointCloudHeatSolver(self.point_cloud)
+        for i in range(n_samples):
+            x = solver.compute_distance(i)
+            self.pt_cloud_distances[:, i] = x
         
+        # np.random.seed(2023)
+        rand_pt = np.random.randint(n_samples)
+        p = mp.plot(self.point_cloud, 
+                    c = self.pt_cloud_distances[:, rand_pt], shading={'point_size':0.2},
+                    return_plot=True)
+        p.add_points(self.point_cloud[rand_pt].reshape(1,-1), 
+                    shading={'point_color':'red', 'point_size':0.7})
+
+
     def preprocessing_step_reweighting_factors(self, included_face_ids):
         if self.cfg.satr.gaussian_reweighting:
             (
@@ -572,8 +592,9 @@ class SATRSAM(GLIPSAMMeshSegmenter):
     def sample_mesh(self, n_samples=None):
         if (n_samples == None):
             n_samples = int(self.mesh.vertices.shape[0] * 2)
+        np.random.seed(42)
         trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
         self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
-        p = mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
+        # mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
 
 
