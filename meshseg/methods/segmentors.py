@@ -199,6 +199,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         self.rendered_images_face_ids[i].squeeze(0),
                     )
                 else:
+                    # print('View:', i, 'Prompt:', prompt)
                     (
                         face_view_prompt_score,
                         face_view_prompt_freq,
@@ -291,7 +292,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         multimask_output=False,
                     )
                     # score *= glip_res[1].get_field('scores')[bbox_id].item()
-                    if ('mattress' in p and glip_res[1].get_field('labels')[bbox_id] == 1):
+                    if ('shelves' in p and glip_res[1].get_field('labels')[bbox_id] == 1):
                         self.show_mask(mask, ax, np.array(self.colors_dict[p_id]) / 255.0)
                     masks.append((mask, score))
                 self.masks_predictions[i][p] = masks
@@ -337,17 +338,19 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         print(f"Getting faces neighborhood")
         self.get_faces_neighborhood()
         print(f"Sampling points on surface")
-        self.sample_mesh()
-        if ('geodesic_from_point_cloud' in self.config.satr):
-            self.geodesic_from_point_cloud = self.config.satr.geodesic_from_point_cloud
+        if ('geodesic_from_point_cloud' in self.cfg.satr):
+            self.geodesic_from_point_cloud = self.cfg.satr.geodesic_from_point_cloud
         else:
             self.geodesic_from_point_cloud = True
-        if (self.geodesic_from_point_cloud):
+        if (self.cfg.satr.gaussian_reweighting and self.geodesic_from_point_cloud):
+            self.sample_mesh()
             print(f"Computing point cloud pairwise distances")
             self.compute_pt_cloud_pairwise_dist()
-        else:
+        elif (self.cfg.satr.gaussian_reweighting):
             print(f"Computing vertices pairwise distances")
             self.compute_vertices_pairwise_dist()
+        else:
+            print('No Gaussian Reweighting')
 
     def get_faces_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
@@ -462,7 +465,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         self.pt_cloud_distances = np.zeros((n_samples, n_samples))
         solver = pp3d.PointCloudHeatSolver(self.point_cloud)
-        for i in range(n_samples):
+        for i in tqdm(range(n_samples)):
             x = solver.compute_distance(i)
             self.pt_cloud_distances[:, i] = x
         
@@ -626,7 +629,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
     def sample_mesh(self, n_samples=None):
         if (n_samples == None):
             n_samples = int(self.mesh.vertices.shape[0] * 2)
-        np.random.seed(42)
+        # np.random.seed(42)
         trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
         self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
         # mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
