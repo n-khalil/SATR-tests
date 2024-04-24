@@ -8,8 +8,10 @@ import os.path as osp
 from ast import literal_eval
 from omegaconf import OmegaConf
 
-from meshseg.mesh import MeshNormalizer
 from meshseg.mesh import Mesh
+from meshseg.mesh import MeshNormalizer
+from meshseg.mesh import MeshSampler
+from meshseg.point_cloud import PointCloudTriangulator
 from meshseg.renderer.renderer import Renderer
 from meshseg.methods.segmentors import *
 
@@ -109,6 +111,21 @@ def segment(
                 * torch.tensor(config.color).unsqueeze(0).unsqueeze(0).cuda(),
                 mesh.faces,
             )
+
+    # Sample the mesh
+    # meshSampler = MeshSampler(mesh)
+    n_samples_factor = 2
+    if ("n_samples_factor" in config.satr):
+        n_samples_factor = config.satr.n_samples_factor
+    point_cloud = MeshSampler(mesh, n_samples_factor)()
+
+    # Triangulate the Point Cloud
+    alpha = 0.03
+    if ("alpha" in config.satr):
+        alpha = config.satr.alpha
+    remeshed_vertices, remeshed_faces = PointCloudTriangulator(point_cloud, alpha)()
+    mp.plot(remeshed_vertices, remeshed_faces, np.random.rand(remeshed_faces.shape[0]))
+    return
 
     # Create the renderer
     print(f"Creating the renderer...")

@@ -1,8 +1,8 @@
 import trimesh
-import open3d as o3d
+import numpy as np
 
 class MeshSampler:
-    def __init__(self, n_samples_factor=2):
+    def __init__(self, mesh, n_samples_factor=2):
         self.mesh = mesh
         self.n_samples_factor = n_samples_factor
 
@@ -13,5 +13,4 @@ class MeshSampler:
 
     def __call__(self):
         n_samples = int(self.mesh.vertices.shape[0] * self.n_samples_factor)
-        point_cloud = self.sample_mesh(n_samples)
-        return self.point_cloud
+        return self.sample_mesh(n_samples)
