@@ -46,6 +46,10 @@ class Mesh:
         self.set_mesh_color(color)
         # self.face_attributes =
 
+    def create_from_arrays(self, vertices, faces):
+        self.vertices = torch.tensor(vertices.to(device))
+        self.faces = torch.tensor(faces.to(device))
+
     def standardize_mesh(self, inplace=False):
         mesh = self if inplace else copy.deepcopy(self)
         return standardize_mesh(mesh)

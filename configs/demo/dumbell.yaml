@@ -12,6 +12,7 @@ satr:
   face_smoothing_n_ring: 5
   sam: true
   geodesic_from_point_cloud: true
+  per_face_scores: false
 
 camera:
   n_views: 10
