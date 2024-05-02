@@ -92,6 +92,26 @@ def segment(
     # normalize mesh in unit sphere
     _ = MeshNormalizer(mesh)()
 
+    # Sample the mesh
+    print('Sampling the mesh...')
+    n_samples_factor = 2
+    if ("n_samples_factor" in config.satr):
+        n_samples_factor = config.satr.n_samples_factor
+    point_cloud = MeshSampler(mesh, n_samples_factor)()
+
+    # Triangulate the Point Cloud
+    # alpha = 0.03
+    # if ("alpha" in config.satr):
+    #     alpha = config.satr.alpha
+    # remeshed_vertices, remeshed_faces = PointCloudTriangulator(point_cloud, alpha)()
+    # mp.plot(remeshed_vertices, remeshed_faces, np.random.rand(remeshed_faces.shape[0]))
+
+    # mesh.vertices = torch.tensor(remeshed_vertices, device=device, dtype=torch.float32)
+    # mesh.faces = torch.tensor(remeshed_faces, device=device, dtype=torch.int64)
+    # mesh.face_areas = kaolin.ops.mesh.face_areas(
+    #         mesh.vertices.unsqueeze(0), mesh.faces
+    #     ).view(len(mesh.faces))
+
     # Put default grey color to the mesh
     if "color" not in config:
         mesh.face_attributes = kaolin.ops.mesh.index_vertices_by_faces(
@@ -104,28 +124,13 @@ def segment(
             mesh.face_attributes = kaolin.ops.mesh.index_vertices_by_faces(
                 mesh.vertex_normals.unsqueeze(0),
                 mesh.faces
-            )            
+            )
         else:
             mesh.face_attributes = kaolin.ops.mesh.index_vertices_by_faces(
                 torch.ones(1, len(mesh.vertices), 3).cuda()
                 * torch.tensor(config.color).unsqueeze(0).unsqueeze(0).cuda(),
                 mesh.faces,
             )
-
-    # Sample the mesh
-    # meshSampler = MeshSampler(mesh)
-    n_samples_factor = 2
-    if ("n_samples_factor" in config.satr):
-        n_samples_factor = config.satr.n_samples_factor
-    point_cloud = MeshSampler(mesh, n_samples_factor)()
-
-    # Triangulate the Point Cloud
-    alpha = 0.03
-    if ("alpha" in config.satr):
-        alpha = config.satr.alpha
-    remeshed_vertices, remeshed_faces = PointCloudTriangulator(point_cloud, alpha)()
-    mp.plot(remeshed_vertices, remeshed_faces, np.random.rand(remeshed_faces.shape[0]))
-    return
 
     # Create the renderer
     print(f"Creating the renderer...")
@@ -172,7 +177,7 @@ def segment(
     # Create the segmenter
     # segmenter = SATR(config)
     segmenter = SATRSAM(config)
-    segmenter.set_mesh(mesh)
+    segmenter.set_mesh(mesh, point_cloud)
     segmenter.set_prompts(prompts)
     segmenter.set_rendered_views(rendered_images, faces_idx)
 

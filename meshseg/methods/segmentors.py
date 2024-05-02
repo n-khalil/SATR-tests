@@ -221,7 +221,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         num_views = len(self.rendered_images)
 
         # fig, axs = plt.subplots(2,5,figsize=(80,22))
-        fig, axs = plt.subplots(3,4,figsize=(30,22))
+        # fig, axs = plt.subplots(3,4,figsize=(30,22))
         # fig, axs = plt.subplots(1,2,figsize=(80,22))
 
         for i in range(len(self.rendered_images)):
@@ -231,7 +231,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             img = self.rendered_images[i].permute([1, 2, 0]) * 255.0
             img = img.to(torch.uint8)
             img_to_show = img.cpu().numpy().copy()
-            ax = axs[i // 4, i % 4]
+            # ax = axs[i // 4, i % 4]
             # ax = axs[i]
             for p_id, p in enumerate(self.prompts):
                 print('GLIP - View:', i, 'Prompt:', p_id, end=' ')
@@ -253,7 +253,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                 
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
-            ax.imshow(img_to_show)
+            # ax.imshow(img_to_show)
+            plt.imshow(img_to_show)
         plt.show()
     
     def predict_exact_masks(self):
@@ -332,7 +333,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.face_visibilty_ratios,
         ) = (None, None, None, None)
 
-    def set_mesh(self, mesh):
+    def set_mesh(self, mesh, point_cloud=None):
         super().set_mesh(mesh)
 
         print(f"Getting faces neighborhood")
@@ -343,7 +344,9 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         else:
             self.geodesic_from_point_cloud = True
         if (self.cfg.satr.gaussian_reweighting and self.geodesic_from_point_cloud):
-            self.sample_mesh()
+            # self.sample_mesh()
+            self.point_cloud = point_cloud[0]
+            self.pt_to_face = point_cloud[1]
             print(f"Computing point cloud pairwise distances")
             self.compute_pt_cloud_pairwise_dist()
         elif (self.cfg.satr.gaussian_reweighting):
@@ -626,12 +629,12 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
-    def sample_mesh(self, n_samples=None):
-        if (n_samples == None):
-            n_samples = int(self.mesh.vertices.shape[0] * 2)
-        # np.random.seed(42)
-        trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
-        self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
-        # mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
+    # def sample_mesh(self, n_samples=None):
+    #     if (n_samples == None):
+    #         n_samples = int(self.mesh.vertices.shape[0] * 2)
+    #     # np.random.seed(42)
+    #     trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
+    #     self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
+    #     # mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
 
 

@@ -22,6 +22,6 @@ camera:
   render_res: 1024
   random_rendering: false
 
+# color: "vertex normals"
 background: [255., 255., 255.]
 
-color: "vertex normals"

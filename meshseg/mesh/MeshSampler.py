@@ -8,7 +8,7 @@ class MeshSampler:
 
     def sample_mesh(self, n_samples):
         trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
-        self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
+        self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)
         return self.point_cloud
 
     def __call__(self):
