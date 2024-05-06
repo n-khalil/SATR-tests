@@ -13,6 +13,8 @@ satr:
   sam: false
   geodesic_from_point_cloud: true
   alpha: 0.04
+  per_face: false
+  octree_level: 7
 
 camera:
   n_views: 1

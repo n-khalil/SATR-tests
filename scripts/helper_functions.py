@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 from meshseg.mesh import Mesh
 from meshseg.mesh import MeshNormalizer
 from meshseg.mesh import MeshSampler
-from meshseg.point_cloud import PointCloudTriangulator
+from meshseg.point_cloud.SPCBuilder import SPCBuilder
 from meshseg.renderer.renderer import Renderer
 from meshseg.methods.segmentors import *
 
@@ -97,20 +97,15 @@ def segment(
     n_samples_factor = 2
     if ("n_samples_factor" in config.satr):
         n_samples_factor = config.satr.n_samples_factor
-    point_cloud = MeshSampler(mesh, n_samples_factor)()
+    point_cloud = MeshSampler(mesh, device, n_samples_factor)()
 
-    # Triangulate the Point Cloud
-    # alpha = 0.03
-    # if ("alpha" in config.satr):
-    #     alpha = config.satr.alpha
-    # remeshed_vertices, remeshed_faces = PointCloudTriangulator(point_cloud, alpha)()
-    # mp.plot(remeshed_vertices, remeshed_faces, np.random.rand(remeshed_faces.shape[0]))
-
-    # mesh.vertices = torch.tensor(remeshed_vertices, device=device, dtype=torch.float32)
-    # mesh.faces = torch.tensor(remeshed_faces, device=device, dtype=torch.int64)
-    # mesh.face_areas = kaolin.ops.mesh.face_areas(
-    #         mesh.vertices.unsqueeze(0), mesh.faces
-    #     ).view(len(mesh.faces))
+    # Build SPC
+    if ("octree_level" in config.satr):
+        octree_level = config.satr.octree_level
+    else:
+        octree_level = 7
+        
+    spc = SPCBuilder(point_cloud[0], octree_level, device)
 
     # Put default grey color to the mesh
     if "color" not in config:
@@ -175,7 +170,6 @@ def segment(
     # Segmentation
     #
     # Create the segmenter
-    # segmenter = SATR(config)
     segmenter = SATRSAM(config)
     segmenter.set_mesh(mesh, point_cloud)
     segmenter.set_prompts(prompts)
@@ -184,9 +178,6 @@ def segment(
     # Segment
     predictions, _ = segmenter()
     predictions = torch.tensor(predictions)
-
-    predictions_np = predictions.cpu().numpy()
-    # return predictions_np
 
     # Save the predictions
     np.save(os.path.join(output_dir, "raw_face_preds.npy"), predictions.cpu().numpy())

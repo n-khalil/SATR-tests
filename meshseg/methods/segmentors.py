@@ -199,7 +199,6 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         self.rendered_images_face_ids[i].squeeze(0),
                     )
                 else:
-                    # print('View:', i, 'Prompt:', prompt)
                     (
                         face_view_prompt_score,
                         face_view_prompt_freq,
@@ -465,9 +464,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
     def compute_pt_cloud_pairwise_dist(self):
         n_samples = self.point_cloud.shape[0]
-
         self.pt_cloud_distances = np.zeros((n_samples, n_samples))
-        solver = pp3d.PointCloudHeatSolver(self.point_cloud)
+        solver = pp3d.PointCloudHeatSolver(self.point_cloud.cpu().numpy())
         for i in tqdm(range(n_samples)):
             x = solver.compute_distance(i)
             self.pt_cloud_distances[:, i] = x
