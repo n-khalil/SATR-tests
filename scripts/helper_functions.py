@@ -78,6 +78,7 @@ def segment(
         input_prompt = config.region_names
         mesh_class = config.object_class
 
+    # Prepare Seg classes
     prompts, part_names, cls_name_to_id, cls_id_to_name = prepare_seg_classes(
         input_prompt, mesh_class
     )
@@ -89,7 +90,7 @@ def segment(
         f"Reading the mesh with path: {mesh_path}\n\thaving {mesh.faces.shape[0]} faces and {mesh.vertices.shape[0]} vertices"
     )
 
-    # normalize mesh in unit sphere
+    # Normalize mesh in unit sphere
     _ = MeshNormalizer(mesh)()
 
     # Sample the mesh
@@ -104,7 +105,7 @@ def segment(
         octree_level = config.satr.octree_level
     else:
         octree_level = 7
-        
+
     spc = SPCBuilder(point_cloud[0], octree_level, device)
 
     # Put default grey color to the mesh
@@ -137,12 +138,14 @@ def segment(
     else:
         background = torch.tensor(config.background).to(device)
 
+    # Initialize random rendering argument
     if "random_rendering" in config.camera:
         random_rendering = config.camera.random_rendering
     else:
         random_rendering = False
-    
     print('Random rendering:', random_rendering)
+    
+    ## Render Images
     with torch.no_grad():
         print(f"Rendering the views...")
         elev = None
@@ -166,14 +169,15 @@ def segment(
             random_rendering=random_rendering
         )
         print(f"Rendering the views...done")
-    #
+    
+
     # Segmentation
-    #
+    
     # Create the segmenter
     segmenter = SATRSAM(config)
     segmenter.set_mesh(mesh, point_cloud)
     segmenter.set_prompts(prompts)
-    segmenter.set_rendered_views(rendered_images, faces_idx)
+    segmenter.set_rendered_views(rendered_images, faces_idx, elev, azim, 2)
 
     # Segment
     predictions, _ = segmenter()

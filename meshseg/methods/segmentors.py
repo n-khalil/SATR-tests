@@ -57,10 +57,13 @@ class BaseDetMeshSegmentor(BaseMeshSegmentor):
         self.prompts = prompts
 
     def set_rendered_views(
-        self, rendered_images: torch.Tensor, images_face_ids: torch.Tensor
+        self, rendered_images: torch.Tensor, images_face_ids: torch.Tensor, elev, azim, r
     ):
         self.rendered_images = rendered_images
         self.rendered_images_face_ids = images_face_ids
+        self.elev = elev
+        self.azim = azim
+        self.r = r
 
     def get_included_face_ids(self, pixel_face_ids, bbox_cor, face_counter):
         relevant_face_ids = defaultdict(int)
