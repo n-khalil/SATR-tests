@@ -484,7 +484,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
     def closest_point_in_pt_cloud_from_vertex(self, vertex):
         # Find the closest point in point cloud to the given vertex
         distances = cdist(
-            self.point_cloud,
+            self.point_cloud.cpu().numpy(),
             vertex.reshape(1,-1),
         )
         closest_pt_ind = np.argmin(distances[:, 0])
@@ -582,6 +582,20 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
+    def process_box_predictions_per_sample(self, prompt, preds):
+        # Initialize a score vector for each sample in the PC for the given region prompt (e.g. "the leg of a person").
+        sample_view_prompt_score = np.zeros((len(self.point_cloud.shape[0])))
+
+        pred_bboxes = preds[0][1]
+        pred_bboxes_cor = preds[0][1].bbox
+        n_boxes = len(
+            pred_bboxes
+        )  # The number of predcited bounding boxes for the given prompt (e.g., the leg of a person).
+
+        for i in range(n_boxes):
+            pass
+
+
     def process_masks_predictions(self, prompt, pred_masks, pred_bboxes, rendering_face_ids):
         
         #pred_masks is a list of tuples. Each tuple correspnds to one mask. 
@@ -630,6 +644,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
+
+
     # def sample_mesh(self, n_samples=None):
     #     if (n_samples == None):
     #         n_samples = int(self.mesh.vertices.shape[0] * 2)
