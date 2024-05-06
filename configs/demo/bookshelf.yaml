@@ -3,7 +3,8 @@ backend: satr+glip
 backend_type: detection_based
 dataset_dir: "data/demo"
 
-region_names: "['top', 'sides', 'shelves', 'back panel', 'bottom']"
+# region_names: "['top', 'sides', 'shelves', 'back panel', 'bottom']"
+region_names: "['shelves']"
 object_class: "bookshelf"
 
 satr:
@@ -17,11 +18,11 @@ satr:
   octree_level: 7
 
 camera:
-  n_views: 12
+  n_views: 2
   frontview_std: 4
   frontview_center: [3.14, 0.0]
   render_res: 1024
-  random_rendering: false
+  random_rendering: true
 
 color: "vertex normals"
 

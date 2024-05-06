@@ -106,7 +106,7 @@ def segment(
     else:
         octree_level = 7
 
-    spc = SPCBuilder(point_cloud[0], octree_level, device)
+    spc = SPCBuilder(point_cloud[0], octree_level, device)()
 
     # Put default grey color to the mesh
     if "color" not in config:
@@ -174,10 +174,13 @@ def segment(
     # Segmentation
     
     # Create the segmenter
-    segmenter = SATRSAM(config)
-    segmenter.set_mesh(mesh, point_cloud)
+    segmenter = SATRSAM(config, device)
+    segmenter.set_mesh(mesh, point_cloud, spc, octree_level)
     segmenter.set_prompts(prompts)
-    segmenter.set_rendered_views(rendered_images, faces_idx, elev, azim, 2)
+    segmenter.set_rendered_views(rendered_images, faces_idx, elev, azim, 2,
+                                 width = config.camera.render_res,
+                                 height = config.camera.render_res,
+                                 fov = np.pi/3.)
 
     # Segment
     predictions, _ = segmenter()

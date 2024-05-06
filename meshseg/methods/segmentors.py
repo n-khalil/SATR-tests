@@ -4,6 +4,7 @@ import numpy as np
 import scipy.optimize
 from tqdm.auto import tqdm
 import potpourri3d as pp3d
+import kaolin as kal
 
 from copy import deepcopy
 from collections import Counter
@@ -57,13 +58,17 @@ class BaseDetMeshSegmentor(BaseMeshSegmentor):
         self.prompts = prompts
 
     def set_rendered_views(
-        self, rendered_images: torch.Tensor, images_face_ids: torch.Tensor, elev, azim, r
+        self, rendered_images: torch.Tensor, images_face_ids: torch.Tensor, 
+        elev, azim, r, width, height, fov
     ):
         self.rendered_images = rendered_images
         self.rendered_images_face_ids = images_face_ids
         self.elev = elev
         self.azim = azim
         self.r = r
+        self.width = width
+        self.height = height
+        self.fov = fov
 
     def get_included_face_ids(self, pixel_face_ids, bbox_cor, face_counter):
         relevant_face_ids = defaultdict(int)
@@ -211,6 +216,18 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         self.rendered_images_face_ids[i].squeeze(0),
                     )
 
+                ############################################  
+                bbox_cor = self.bbox_predictions[i][prompt][0][1].bbox[0].to(torch.int64)
+                (col_min, row_min), (col_max, row_max) = (
+                    bbox_cor[:2].tolist(),
+                    bbox_cor[2:].tolist(),
+                )
+                bb = [(col_min, row_min), (col_max, row_max)]
+
+                self.project_bb_on_pt(bb, self.elev[i], self.azim[i])
+                #############################################
+
+
                 face_cls[:, j] += face_view_prompt_score
                 face_freq[:, j] += face_view_prompt_freq
 
@@ -226,6 +243,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         # fig, axs = plt.subplots(3,4,figsize=(30,22))
         # fig, axs = plt.subplots(1,2,figsize=(80,22))
 
+        print(f'Num views: {len(self.rendered_images)}')
         for i in range(len(self.rendered_images)):
             self.bbox_predictions.append({})
 
@@ -257,7 +275,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             
             # ax.imshow(img_to_show)
             plt.imshow(img_to_show)
-        plt.show()
+            plt.show()
+        # plt.show()
     
     def predict_exact_masks(self):
         print("Feeding the bouning boxes to SAM...")
@@ -325,7 +344,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         return self.predict_face_cls()
 
 class SATRSAM(GLIPSAMMeshSegmenter):
-    def __init__(self, cfg):
+    def __init__(self, cfg, device):
         super().__init__(cfg)
 
         (
@@ -334,10 +353,13 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.center_vert_id,
             self.face_visibilty_ratios,
         ) = (None, None, None, None)
+        self.device=device
 
-    def set_mesh(self, mesh, point_cloud=None):
+    def set_mesh(self, mesh, point_cloud=None, spc=None, level=7):
         super().set_mesh(mesh)
 
+        self.point_cloud = point_cloud[0]
+        self.pt_to_face = point_cloud[1]
         print(f"Getting faces neighborhood")
         self.get_faces_neighborhood()
         print(f"Sampling points on surface")
@@ -346,9 +368,6 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         else:
             self.geodesic_from_point_cloud = True
         if (self.cfg.satr.gaussian_reweighting and self.geodesic_from_point_cloud):
-            # self.sample_mesh()
-            self.point_cloud = point_cloud[0]
-            self.pt_to_face = point_cloud[1]
             print(f"Computing point cloud pairwise distances")
             self.compute_pt_cloud_pairwise_dist()
         elif (self.cfg.satr.gaussian_reweighting):
@@ -356,6 +375,14 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.compute_vertices_pairwise_dist()
         else:
             print('No Gaussian Reweighting')
+        if ('per_face' in self.cfg.satr):
+            self.per_face = self.cfg.satr.per_face
+            self.spc = spc
+            self.octree, self.features = spc.octrees, spc.features
+            self.point_hierarchy, self.pyramid, self.prefix = spc.point_hierarchies, spc.pyramids[0], spc.exsum
+            self.octree_level = level
+        else:
+            self.per_face = False
 
     def get_faces_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
@@ -565,7 +592,6 @@ class SATRSAM(GLIPSAMMeshSegmenter):
                 rendering_face_ids, pred_bboxes_cor[i], face_counter
             )
 
-
             # Compute the reweighting factors
             self.preprocessing_step_reweighting_factors(
                 included_face_ids,
@@ -593,8 +619,11 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         )  # The number of predcited bounding boxes for the given prompt (e.g., the leg of a person).
 
         for i in range(n_boxes):
-            pass
-
+            if pred_bboxes.get_field("labels")[i].item() != 1 and "of" in prompt:
+                continue
+            confidence_score = pred_bboxes.get_field("scores")[i].item()
+            # Get the included sample pt ids inside this bounding box
+      
 
     def process_masks_predictions(self, prompt, pred_masks, pred_bboxes, rendering_face_ids):
         
@@ -644,14 +673,50 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
+    def project_bb_on_pt(self, bb, elev, azim):
+        ray_o, ray_d = self.generate_rays_bb(bb, elev, azim)
+        nugs_ridx, nugs_pidx, depth = kal.render.spc.unbatched_raytrace(
+            self.octree, self.point_hierarchy, self.pyramid, self.prefix, ray_o, ray_d, self.octree_level)
+        masked_nugs = kal.render.spc.mark_pack_boundaries(nugs_ridx)
+        nugs_ridx = nugs_ridx[masked_nugs]
+        nugs_pidx = nugs_pidx[masked_nugs]
+        ridx = nugs_ridx.long()
+        pidx = nugs_pidx.long() - self.pyramid[1, self.octree_level]
 
+        included_pts = self.features[pidx]
+        colors = np.zeros((self.point_cloud.shape[0], 3))
+        colors[self.features[pidx].squeeze().cpu().numpy()] = np.array([0,0,255])
+        mp.plot(self.point_cloud.cpu().numpy(), c=colors, shading={'point_size':0.18}, return_plot=True)
+        plt.show()
+        return included_pts
 
-    # def sample_mesh(self, n_samples=None):
-    #     if (n_samples == None):
-    #         n_samples = int(self.mesh.vertices.shape[0] * 2)
-    #     # np.random.seed(42)
-    #     trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
-    #     self.point_cloud = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)[0]
-    #     # mp.plot(self.point_cloud, shading={'point_size':0.1}, return_plot=True)
-
-
+    def generate_rays_bb(self, bbox, elev, azim):
+        aspect_ratio = self.width / self.height
+        eye, look_at, up, right = self.get_camera_properties(elev, azim)
+        (startX, startY) , (endX, endY) = (bbox[0], bbox[1])
+        u = (torch.linspace(startX, endX - 1, endX-startX, device=self.device).unsqueeze(1) + 0.5) / self.width
+        v = 1 - (torch.linspace(startY, endY - 1, endY-startY, device=self.device).unsqueeze(1) + 0.5) / self.height
+        w = 2. * np.tan(self.fov / 2.)
+        ray_x = ((u-0.5) * aspect_ratio * w) * right.unsqueeze(0)
+        ray_x = ray_x.unsqueeze(0)
+        ray_y = ((0.5 - v) * w) * up.unsqueeze(0)
+        ray_y = ray_y.unsqueeze(1)
+        ray_directions = look_at + ray_x - ray_y
+        ray_directions /= torch.norm(ray_directions, dim=2, keepdim=True)
+        ray_directions = ray_directions.view(-1,3)
+        ray_origins = eye.clone().unsqueeze(0).repeat((endX-startX) * (endY-startY), 1)
+        return ray_origins, ray_directions    
+    
+    def get_camera_properties(self, elev, azim):
+        x = self.r * torch.cos(elev) * torch.cos(azim)
+        y = self.r * torch.sin(elev)
+        z = self.r * torch.cos(elev) * torch.sin(azim)
+        eye = torch.tensor([x, y, z], device=self.device)
+        look_at = - eye
+        look_at /= torch.norm(look_at)
+        up = torch.tensor([0.0, 1.0, 0.0], device=self.device)
+        right = torch.cross(look_at, up)
+        right /= torch.norm(right)
+        up = torch.cross(right, look_at)
+        up /= torch.norm(up)
+        return eye, look_at, up, right

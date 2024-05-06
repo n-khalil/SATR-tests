@@ -70,19 +70,6 @@ class Renderer:
             azim = torch.deg2rad(torch.tensor([0, 90, 180, 270, 
                                                0, 90, 180, 270,
                                                0, 90, 180, 270,]))
-
-        # if elev is None:
-        #     if random_rendering:
-        #         elev = torch.randn(num_views, generator=gen) * np.pi / std + center_elev
-        #     else:
-        #         elev = torch.deg2rad(torch.tensor([-45, 0, 45]))
-        #         # elev = torch.deg2rad(torch.tensor([0]))
-        # if azim is None:
-        #     if random_rendering:
-        #         azim = torch.randn(num_views, generator=gen) * 2 * np.pi / std + center_azim
-        #     else:
-        #         azim = torch.deg2rad(torch.tensor([0, 90, 180, 270]))
-        #         # azim = torch.deg2rad(torch.tensor([90, 180]))
         
         images = []
         masks = []
