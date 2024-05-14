@@ -10,6 +10,7 @@ from copy import deepcopy
 from collections import Counter
 from collections import defaultdict
 from scipy.spatial.distance import cdist
+from sklearn.neighbors import NearestNeighbors
 
 import matplotlib.pyplot as plt
 import cv2
@@ -56,6 +57,7 @@ class BaseDetMeshSegmentor(BaseMeshSegmentor):
 
     def set_prompts(self, prompts):
         self.prompts = prompts
+        print(f'Prompts: {prompts}')
 
     def set_rendered_views(
         self, rendered_images: torch.Tensor, images_face_ids: torch.Tensor, 
@@ -163,8 +165,10 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
     def __init__(self, cfg):
         super().__init__(cfg)
 
+        print('Initializing GLIP...')
         self.glip_model = GLIPModel()
         self.sam_model = SAMModel()
+        print('Finished Initializing GLIP')
 
         self.colors_dict = {
             0: [255, 0, 0],   # Red
@@ -224,7 +228,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                 )
                 bb = [(col_min, row_min), (col_max, row_max)]
 
-                self.project_bb_on_pt(bb, self.elev[i], self.azim[i])
+                # self.project_bb_on_pt(bb, self.elev[i], self.azim[i])
                 #############################################
 
 
@@ -232,6 +236,65 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                 face_freq[:, j] += face_view_prompt_freq
 
         return face_cls, face_freq
+
+
+    def predict_face_cls_per_sample(self):
+        samples_cls, samples_freq = self.predict_samples_cls()
+
+        face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
+        face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
+
+        for f in range(len(self.mesh.faces)):
+            pts = np.array(self.face_to_all_pts[f]).astype(np.int16)
+            if (len(pts) > 0):
+                face_cls[f, :] = np.sum(samples_cls[pts, :], axis=0)
+
+        return face_cls, face_freq
+
+
+    def predict_samples_cls(self):
+        # Get the bounding boxes predictions for the given prompts
+        self.predict_bboxes()
+        assert self.bbox_predictions is not None
+        print(f"Finished GLIP")
+
+        if self.cfg.satr.sam:
+            self.predict_exact_masks()
+            print('Finished SAM')
+
+        samples_cls = np.zeros((len(self.point_cloud), len(self.prompts)))
+        samples_freq = np.zeros((len(self.point_cloud), len(self.prompts)))
+
+        # Looping over the views
+        for i, view in tqdm(enumerate(self.rendered_images)):
+            for j, prompt in enumerate(self.prompts):
+                print(f'Processing view: {i}, Prompt: {j}')
+                if self.cfg.satr.sam:
+                    (
+                        face_view_prompt_score,
+                        face_view_prompt_freq,
+                    ) = self.process_masks_predictions(
+                        prompt,
+                        self.masks_predictions[i][prompt],
+                        self.bbox_predictions[i][prompt][0][1],
+                        self.rendered_images_face_ids[i].squeeze(0),
+                    )
+                else:
+                    (
+                        sample_view_prompt_score,
+                        sample_view_prompt_freq,
+                    ) = self.process_box_predictions_per_sample(
+                        prompt,
+                        self.bbox_predictions[i][prompt],
+                        self.elev[i],
+                        self.azim[i]
+                    )
+
+
+                samples_cls[:, j] += sample_view_prompt_score
+                samples_freq[:, j] += sample_view_prompt_freq
+
+        return samples_cls, samples_freq
 
     def predict_bboxes(self):
         # Generate GLIP predictions for every rendered image
@@ -274,8 +337,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
             # ax.imshow(img_to_show)
-            plt.imshow(img_to_show)
-            plt.show()
+            # plt.imshow(img_to_show)
+            # plt.show()
         # plt.show()
     
     def predict_exact_masks(self):
@@ -341,7 +404,10 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
         assert self.glip_model is not None
         assert self.rendered_images is not None
 
-        return self.predict_face_cls()
+        if (self.per_face):
+            return self.predict_face_cls()
+        else:
+            return self.predict_face_cls_per_sample()
 
 class SATRSAM(GLIPSAMMeshSegmenter):
     def __init__(self, cfg, device):
@@ -360,9 +426,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         self.point_cloud = point_cloud[0]
         self.pt_to_face = point_cloud[1]
-        print(f"Getting faces neighborhood")
-        self.get_faces_neighborhood()
-        print(f"Sampling points on surface")
+        self.face_to_all_pts = point_cloud[2]
         if ('geodesic_from_point_cloud' in self.cfg.satr):
             self.geodesic_from_point_cloud = self.cfg.satr.geodesic_from_point_cloud
         else:
@@ -377,12 +441,19 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             print('No Gaussian Reweighting')
         if ('per_face' in self.cfg.satr):
             self.per_face = self.cfg.satr.per_face
+        else:
+            self.per_face = False
+        print(f'Per Face scores' if self.per_face else 'Per Sample Point scores')
+        if (self.per_face == False):
             self.spc = spc
             self.octree, self.features = spc.octrees, spc.features
             self.point_hierarchy, self.pyramid, self.prefix = spc.point_hierarchies, spc.pyramids[0], spc.exsum
             self.octree_level = level
+            print(f"Getting samples neighborhood")
+            self.get_samples_neighborhood()
         else:
-            self.per_face = False
+            print(f"Getting faces neighborhood")
+            self.get_faces_neighborhood()
 
     def get_faces_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
@@ -412,6 +483,35 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             c.append(len(faces_adjacency_res[k]))
 
         self.face_adjacency = faces_adjacency_res
+
+    def get_samples_neighborhood(self):
+        n = self.cfg.satr.face_smoothing_n_ring
+        nbrs = NearestNeighbors(n_neighbors=n, algorithm='ball_tree').fit(self.point_cloud.cpu().numpy())
+        _, knn = nbrs.kneighbors(self.point_cloud.cpu().numpy())
+
+        pts_adjacency = defaultdict(set)
+
+        for pt_id in range(self.point_cloud.shape[0]):
+            pts_adjacency[pt_id] = set(knn[pt_id])
+        
+        c = []
+        pts_adjacency_res = deepcopy(pts_adjacency)
+
+        for k in pts_adjacency:
+            for i in range(n - 1):
+                start = deepcopy(pts_adjacency_res[k])
+                end = set(deepcopy(pts_adjacency_res[k]))
+                for f in start:
+                    end.update(pts_adjacency[f])
+                pts_adjacency_res[k] = end
+            c.append(len(pts_adjacency_res[k]))
+
+        # print(f'pts adjacency [0]: {pts_adjacency_res[0]}') 
+        # colors = np.zeros((self.point_cloud.shape[0], 3))
+        # colors[np.array(list(pts_adjacency_res[np.random.randint(self.point_cloud.shape[0])]))] = np.array([255,0,0])
+        # mp.plot(self.point_cloud.cpu().numpy(), c = colors, shading={'point_size':0.08})
+        # plt.show()
+        self.pt_adjacency = pts_adjacency_res
 
     def compute_faces_to_capital_face_distances(self, faces_dict):
         visible_faces_ids = torch.tensor(sorted(list(faces_dict.keys()))).int().cuda()
@@ -444,7 +544,6 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             nearest_vert_ind = np.argmin(distances[:, 0])
             nearest_vert_id = visible_vertices_ids[nearest_vert_ind]
 
-
         # Now compute the distance from this vertex (representing the capital face on the mesh) 
         # to each face found in faces_dict
         faces_distance = {}
@@ -473,6 +572,33 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         else:
             return faces_distance_factor, nearest_vert_id
 
+    def compute_pts_to_capital_sample_distances(self, visible_pt_ids):
+        central_pt = torch.mean(self.point_cloud[visible_pt_ids], dim=0)
+        _, capital_sample_pt_ind = self.closest_point_in_pt_cloud_from_vertex(
+                central_pt.cpu().numpy())
+        # p = mp.plot(self.point_cloud.cpu().numpy(), shading={'point_size':0.18}, return_plot=True)
+        # p.add_points(self.point_cloud[capital_sample_pt_ind], shading={'point_color':'red', 'point_size':0.2})
+        # plt.show()
+
+        # Now compute the distance from this vertex (representing the capital face on the mesh) 
+        # to each face found in faces_dict
+        pts_distance = {}
+        distances = []
+
+        for k in visible_pt_ids:
+            distances.append(self.pt_cloud_distances[k.item(), capital_sample_pt_ind])
+            pts_distance[k.item()] = self.pt_cloud_distances[k.item(), capital_sample_pt_ind]
+
+        distances = np.array(distances)
+        mean = np.mean(distances)
+        std = np.std(distances)
+        g = scipy.stats.norm(mean, std)
+
+        pts_distance_factor = {}
+        for k in visible_pt_ids:
+            pts_distance_factor[k.item()] = g.pdf(pts_distance[k.item()])
+        return pts_distance_factor, capital_sample_pt_ind
+    
     def compute_vertices_pairwise_dist(self):
         n_vertices = len(self.mesh.vertices)
 
@@ -536,6 +662,16 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.face_visibilty_ratios = self.compute_face_visibilty_ratio(
                 included_face_ids
             )
+    
+    def preprocessing_step_reweighting_factors_per_sample(self, included_pt_ids):
+        if self.cfg.satr.gaussian_reweighting:
+            (
+                self.pts_distance_factors,
+                self.center_pt_id,
+            ) = self.compute_pts_to_capital_sample_distances(included_pt_ids)
+
+        if self.cfg.satr.face_smoothing:
+            self.pt_visibilty_ratios = self.compute_pt_visibility_ratio(included_pt_ids)
 
     def compute_reweighting_factors(self, included_face_ids):
         ret = {"faces_distance_factor": {}, "face_visibilty_ratio": {}}
@@ -551,6 +687,22 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             )
 
         return ret
+    
+    def compute_reweighting_factors_per_sample(self, included_pt_ids):
+        ret = {"pts_distance_factor": {}, "pt_visibilty_ratio": {}}
+        
+        for k in included_pt_ids:
+            ret['pts_distance_factor'][k.item()] = (
+                self.pts_distance_factors[k.item()]
+                if self.cfg.satr.gaussian_reweighting
+                else 1.0
+            )
+            ret['pt_visibilty_ratio'][k.item()] = (
+                self.pt_visibilty_ratios[k.item()]
+                if self.cfg.satr.face_smoothing
+                else 1.0
+            )
+        return ret
 
     def compute_face_visibilty_ratio(self, relevant_face_ids):
         face_neighborhood = self.face_adjacency
@@ -565,6 +717,20 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             relevant_face_scores[k] = score
 
         return relevant_face_scores
+
+    def compute_pt_visibility_ratio(self, relevant_pt_ids):
+        pt_neighborhood = self.pt_adjacency
+
+        relevant_pt_scores = {}
+        for k in relevant_pt_ids:
+            score = 0
+            # for pt_id in pt_neighborhood[k.item()]:
+            #     score += pt_id in relevant_pt_ids
+            neighbors = torch.tensor(list(pt_neighborhood[k.item()]), device=self.device)
+            score = torch.sum(torch.isin(relevant_pt_ids, neighbors)).to(torch.float32).item()
+            score /= len(pt_neighborhood[k.item()]) + 0.00001
+            relevant_pt_scores[k.item()] = score
+        return relevant_pt_scores
 
     def process_box_predictions(self, prompt, preds, rendering_face_ids):
         # Initialize a score vector for each face in the mesh for the given region prompt (e.g. "the leg of a person").
@@ -608,10 +774,11 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
-    def process_box_predictions_per_sample(self, prompt, preds):
+    def process_box_predictions_per_sample(self, prompt, preds, elev, azim):
         # Initialize a score vector for each sample in the PC for the given region prompt (e.g. "the leg of a person").
-        sample_view_prompt_score = np.zeros((len(self.point_cloud.shape[0])))
-
+        sample_view_prompt_score = np.zeros((self.point_cloud.shape[0]))
+        sample_view_freq = np.zeros((self.point_cloud.shape[0]))
+    
         pred_bboxes = preds[0][1]
         pred_bboxes_cor = preds[0][1].bbox
         n_boxes = len(
@@ -623,7 +790,29 @@ class SATRSAM(GLIPSAMMeshSegmenter):
                 continue
             confidence_score = pred_bboxes.get_field("scores")[i].item()
             # Get the included sample pt ids inside this bounding box
-      
+            bbox_cor = pred_bboxes_cor[i].to(torch.int64)
+            (col_min, row_min), (col_max, row_max) = (
+                bbox_cor[:2].tolist(),
+                bbox_cor[2:].tolist(),
+            )
+            bb = [(col_min, row_min), (col_max, row_max)]
+            included_pts_ids = self.project_bb_on_pt(bb, elev, azim)
+
+            # Compute the reweighting factors
+            self.preprocessing_step_reweighting_factors_per_sample(
+                included_pts_ids,
+            )
+            reweighting_factors = self.compute_reweighting_factors_per_sample(included_pts_ids)
+
+            for k in included_pts_ids:
+                final_factor = 1.0
+
+                for f in list(reweighting_factors.values()):
+                    final_factor *= f[k.item()]
+
+                sample_view_prompt_score[k.item()] += confidence_score * final_factor
+
+        return sample_view_prompt_score, sample_view_freq
 
     def process_masks_predictions(self, prompt, pred_masks, pred_bboxes, rendering_face_ids):
         
@@ -683,12 +872,12 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         ridx = nugs_ridx.long()
         pidx = nugs_pidx.long() - self.pyramid[1, self.octree_level]
 
-        included_pts = self.features[pidx]
-        colors = np.zeros((self.point_cloud.shape[0], 3))
-        colors[self.features[pidx].squeeze().cpu().numpy()] = np.array([0,0,255])
-        mp.plot(self.point_cloud.cpu().numpy(), c=colors, shading={'point_size':0.18}, return_plot=True)
-        plt.show()
-        return included_pts
+        included_pt_ids = self.features[pidx]
+        # colors = np.zeros((self.point_cloud.shape[0], 3))
+        # colors[self.features[pidx].squeeze().cpu().numpy()] = np.array([0,0,255])
+        # mp.plot(self.point_cloud.cpu().numpy(), c=colors, shading={'point_size':0.18}, return_plot=True)
+        # plt.show()
+        return included_pt_ids.squeeze().unique()
 
     def generate_rays_bb(self, bbox, elev, azim):
         aspect_ratio = self.width / self.height

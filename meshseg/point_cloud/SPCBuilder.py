@@ -6,7 +6,6 @@ class SPCBuilder:
         self.point_cloud = point_cloud
         self.level = level
         self.device=device
-        print(f'SPC Builder init')
 
     def build_SPC(self):
         spc_features = torch.arange(0, self.point_cloud.shape[0]).unsqueeze(1).to(self.device)

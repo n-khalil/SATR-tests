@@ -30,7 +30,7 @@ def prepare_seg_classes(input_prompt, input_mesh_class):
     prompts = sorted(ps)
     for i, p in enumerate(prompts):
         prompts[i] = f"the {p} of a {input_mesh_class}."
-    print(prompts)
+    # print(prompts)
 
     ind = 0
     cls_name_to_id = {}
@@ -45,7 +45,7 @@ def prepare_seg_classes(input_prompt, input_mesh_class):
     cls_name_to_id["unknown"] = ind
     cls_id_to_name[ind] = "unknown"
 
-    print(cls_name_to_id)
+    # print(cls_name_to_id)
 
     return prompts, part_names, cls_name_to_id, cls_id_to_name
 
@@ -62,7 +62,7 @@ def segment(
     config = OmegaConf.load(config_path)
 
     mesh_path = os.path.join(config.dataset_dir, mesh_name)
-    print(mesh_path)
+    # print(mesh_path)
     assert os.path.isfile(mesh_path)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -186,12 +186,15 @@ def segment(
     predictions, _ = segmenter()
     predictions = torch.tensor(predictions)
 
+    print(f'Predicitons: {predictions.shape}')
+
     # Save the predictions
     np.save(os.path.join(output_dir, "raw_face_preds.npy"), predictions.cpu().numpy())
 
     faces_not_assigned = torch.where(torch.sum(predictions, axis=-1) < 0.0001)[0]
     predictions_cls = predictions.argmax(axis=-1)
     predictions_cls[faces_not_assigned] = len(prompts)
+
 
     cols = [
         [247 / 255, 165 / 255, 94 / 255.0],

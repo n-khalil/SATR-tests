@@ -12,7 +12,9 @@ satr:
   face_smoothing: true
   face_smoothing_n_ring: 5
   sam: false
-  geodesic_from_point_cloud: false
+  geodesic_from_point_cloud: true
+  per_face: true
+  octree_level: 7
 
 
 camera:
@@ -20,8 +22,8 @@ camera:
   frontview_std: 4
   frontview_center: [3.14, 0.0]
   render_res: 1024
-  random_rendering: true
+  random_rendering: false
 
-# color: "vertex normals"
+color: "vertex normals"
 
-# background: [255.0, 255.0, 255.0]
+background: [255.0, 255.0, 255.0]
