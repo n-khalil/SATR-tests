@@ -7,14 +7,13 @@ object_class: bookshelf
 satr:
   gaussian_reweighting: true
   face_smoothing: true
-  face_smoothing_n_ring: 2
+  face_smoothing_n_ring: 5
   sam: false
   geodesic_from_point_cloud: true
-  alpha: 0.04
   per_face: false
-  octree_level: 7
+  octree_level: 8
 camera:
-  n_views: 12
+  n_views: 1
   frontview_std: 4
   frontview_center:
   - 3.14

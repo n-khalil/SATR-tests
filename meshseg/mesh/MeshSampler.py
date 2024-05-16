@@ -2,6 +2,7 @@ import trimesh
 import numpy as np
 import torch
 from collections import defaultdict
+import kaolin as kal
 
 class MeshSampler:
     def __init__(self, mesh, device, n_samples_factor=2):
@@ -19,6 +20,19 @@ class MeshSampler:
             face_to_all_pts[pt_to_face[pt]].append(pt)
         return torchPC, pt_to_face, face_to_all_pts
 
+
+    def computeNormals(self, pt_to_face):
+        face_normals = kal.ops.mesh.face_normals(
+            kal.ops.mesh.index_vertices_by_faces(self.mesh.vertices.unsqueeze(0), self.mesh.faces),
+              unit=True).squeeze()
+        n_pts = len(pt_to_face)
+        pts_normals = torch.zeros((n_pts, 3), device=self.device)
+        for pt in range(n_pts):
+            pts_normals[pt] = face_normals[pt_to_face[pt]]
+        return pts_normals
+
     def __call__(self):
         n_samples = int(self.mesh.vertices.shape[0] * self.n_samples_factor)
-        return self.sample_mesh(n_samples)
+        torchPC, pt_to_face, face_to_all_pts = self.sample_mesh(n_samples)
+        pts_normals = self.computeNormals(pt_to_face)
+        return torchPC, pt_to_face, face_to_all_pts, pts_normals

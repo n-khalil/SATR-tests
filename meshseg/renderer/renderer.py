@@ -1,5 +1,7 @@
 # Credits to/Adopted from: https://github.com/threedle/3DHighlighter/
 import torch
+from PIL import Image
+import torchvision
 import numpy as np
 import kaolin as kal
 import matplotlib.pyplot as plt
@@ -43,7 +45,8 @@ class Renderer:
         return_mask=False,
         return_face_idx=False,
         seed=None,
-        random_rendering=False
+        random_rendering=False,
+        save =True
     ):
         # Front view with small perturbations in viewing angle
         verts = mesh.vertices
@@ -140,6 +143,13 @@ class Renderer:
         images = torch.cat(images, dim=0).permute(0, 3, 1, 2)
         masks = torch.cat(masks, dim=0)
         
+        if save:
+            with torch.no_grad():
+                print(f'Num views: {num_views}')
+                for i in range(num_views):
+                    path = f'outputs/demo/ABO/bed/renders/view_{i}.jpg'
+                    img = Image.fromarray((images[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
+                    img.save(path)
         if show:
             with torch.no_grad():
                 # fig, axs = plt.subplots(

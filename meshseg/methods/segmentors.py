@@ -5,6 +5,7 @@ import scipy.optimize
 from tqdm.auto import tqdm
 import potpourri3d as pp3d
 import kaolin as kal
+from PIL import Image
 
 from copy import deepcopy
 from collections import Counter
@@ -318,7 +319,9 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             # ax = axs[i]
             for p_id, p in enumerate(self.prompts):
                 print('GLIP - View:', i, 'Prompt:', p_id, end=' ')
-                
+
+                img_to_save = img.cpu().numpy().copy()
+
                 res = self.glip_model.predict(img.cpu().numpy(), p)
                 num_bboxes = len(res[1].bbox)
 
@@ -330,10 +333,13 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                     startY = int(res[1].bbox[bbox_id][1].item())
                     endX = int(res[1].bbox[bbox_id][2].item())
                     endY = int(res[1].bbox[bbox_id][3].item())
-                    cv2.rectangle(img_to_show, (startX, startY), (endX, endY), self.colors_dict[p_id], 2)
+                    cv2.rectangle(img_to_save, (startX, startY), (endX, endY), self.colors_dict[p_id], 2)
                     score = res[1].get_field('scores')[bbox_id].item()
-                    cv2.putText(img_to_show, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_id], 2)
-                
+                    cv2.putText(img_to_save, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_id], 2)
+
+                PILImage = Image.fromarray(img_to_save)
+                PILImage.save(f'outputs/demo/ABO/bed/GLIP_output/view_{i}_{p}.jpg')
+
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
             # ax.imshow(img_to_show)
@@ -427,13 +433,15 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         self.point_cloud = point_cloud[0]
         self.pt_to_face = point_cloud[1]
         self.face_to_all_pts = point_cloud[2]
+        self.pts_normals = point_cloud[3]
         if ('geodesic_from_point_cloud' in self.cfg.satr):
             self.geodesic_from_point_cloud = self.cfg.satr.geodesic_from_point_cloud
         else:
             self.geodesic_from_point_cloud = True
         if (self.cfg.satr.gaussian_reweighting and self.geodesic_from_point_cloud):
-            print(f"Computing point cloud pairwise distances")
+            # print(f"Computing point cloud pairwise distances")
             self.compute_pt_cloud_pairwise_dist()
+            # self.solver = pp3d.PointCloudHeatSolver(self.point_cloud.cpu().numpy())
         elif (self.cfg.satr.gaussian_reweighting):
             print(f"Computing vertices pairwise distances")
             self.compute_vertices_pairwise_dist()
@@ -549,8 +557,13 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         faces_distance = {}
         distances = []
 
+        # distance_to_all_pts = self.solver.compute_distance(capital_sample_pt_ind)
+        # distances = distance_to_all_pts[faces_dict.items()]
         for k, _ in faces_dict.items():
             if (self.geodesic_from_point_cloud):
+                # _, face_sample_point_ind = self.closest_point_in_pt_cloud_from_face(self.mesh.faces[k].cpu().numpy())
+                # distances.append(self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind])
+                # faces_distance[k] = self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind]
                 _, face_sample_point_ind = self.closest_point_in_pt_cloud_from_face(self.mesh.faces[k].cpu().numpy())
                 distances.append(self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind])
                 faces_distance[k] = self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind]
@@ -798,6 +811,12 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             bb = [(col_min, row_min), (col_max, row_max)]
             included_pts_ids = self.project_bb_on_pt(bb, elev, azim)
 
+            # if ('back' in prompt):
+            #     colors = np.zeros((self.point_cloud.shape[0], 3))
+            #     colors[included_pts_ids.cpu().numpy()] = np.array([0,0,255])
+            #     mp.plot(self.point_cloud.cpu().numpy(), c=colors, shading={'point_size':0.14}, return_plot=True)
+            #     plt.show()
+
             # Compute the reweighting factors
             self.preprocessing_step_reweighting_factors_per_sample(
                 included_pts_ids,
@@ -872,19 +891,21 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         ridx = nugs_ridx.long()
         pidx = nugs_pidx.long() - self.pyramid[1, self.octree_level]
 
-        included_pt_ids = self.features[pidx]
-        # colors = np.zeros((self.point_cloud.shape[0], 3))
-        # colors[self.features[pidx].squeeze().cpu().numpy()] = np.array([0,0,255])
-        # mp.plot(self.point_cloud.cpu().numpy(), c=colors, shading={'point_size':0.18}, return_plot=True)
-        # plt.show()
+        # included_pt_ids = self.features[pidx]
+        dot_prods = torch.sum(torch.mul(self.pts_normals[self.features[pidx]].squeeze(),
+                                                   ray_d[ridx]), dim=1).unsqueeze(1)
+        threshold = -0.5
+        included_pt_ids = torch.where(dot_prods < threshold, self.features[pidx], -1)
+        included_pt_ids = included_pt_ids[included_pt_ids>=0]
+
         return included_pt_ids.squeeze().unique()
 
     def generate_rays_bb(self, bbox, elev, azim):
         aspect_ratio = self.width / self.height
         eye, look_at, up, right = self.get_camera_properties(elev, azim)
         (startX, startY) , (endX, endY) = (bbox[0], bbox[1])
-        u = (torch.linspace(startX, endX - 1, endX-startX, device=self.device).unsqueeze(1) + 0.5) / self.width
-        v = 1 - (torch.linspace(startY, endY - 1, endY-startY, device=self.device).unsqueeze(1) + 0.5) / self.height
+        u = (torch.linspace(startX, endX - 1, 4*(endX-startX), device=self.device).unsqueeze(1) + 0.5) / self.width
+        v = 1 - (torch.linspace(startY, endY - 1, 4*(endY-startY), device=self.device).unsqueeze(1) + 0.5) / self.height
         w = 2. * np.tan(self.fov / 2.)
         ray_x = ((u-0.5) * aspect_ratio * w) * right.unsqueeze(0)
         ray_x = ray_x.unsqueeze(0)
@@ -893,7 +914,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         ray_directions = look_at + ray_x - ray_y
         ray_directions /= torch.norm(ray_directions, dim=2, keepdim=True)
         ray_directions = ray_directions.view(-1,3)
-        ray_origins = eye.clone().unsqueeze(0).repeat((endX-startX) * (endY-startY), 1)
+        ray_origins = eye.clone().unsqueeze(0).repeat(16*(endX-startX) * (endY-startY), 1)
         return ray_origins, ray_directions    
     
     def get_camera_properties(self, elev, azim):
