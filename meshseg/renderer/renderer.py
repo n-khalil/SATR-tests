@@ -5,6 +5,7 @@ import torchvision
 import numpy as np
 import kaolin as kal
 import matplotlib.pyplot as plt
+import os
 
 from ..mesh.utils import get_camera_from_view2
 from ..mesh.utils import device
@@ -13,6 +14,7 @@ from ..mesh.utils import device
 class Renderer:
     def __init__(
         self,
+        save_dir,
         mesh="sample.obj",
         lights=torch.tensor([1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
         camera=kal.render.camera.generate_perspective_projection(np.pi / 3).to(device),
@@ -26,6 +28,7 @@ class Renderer:
         self.lights = lights.unsqueeze(0).to(device)
         self.camera_projection = camera
         self.dim = dim
+        self.save_dir = save_dir
 
     def render_views(
         self,
@@ -147,9 +150,9 @@ class Renderer:
             with torch.no_grad():
                 print(f'Num views: {num_views}')
                 for i in range(num_views):
-                    path = f'outputs/demo/ABO/cabinet/renders/view_{i}.jpg'
+                    save_path = os.path.join(self.save_dir, f'view_{i}.jpg') 
                     img = Image.fromarray((images[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
-                    img.save(path)
+                    img.save(save_path)
         if show:
             with torch.no_grad():
                 # fig, axs = plt.subplots(

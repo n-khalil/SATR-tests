@@ -67,6 +67,9 @@ def segment(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    os.makedirs(os.path.join(output_dir, 'renders'), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'GLIP_output'), exist_ok=True)
+
     # Save the config in the output folder
     with open(os.path.join(output_dir, "config.yaml"), "w") as fout:
         OmegaConf.save(config, fout)
@@ -130,7 +133,8 @@ def segment(
 
     # Create the renderer
     print(f"Creating the renderer...")
-    render = Renderer(dim=(config.camera.render_res, config.camera.render_res))
+    render = Renderer(dim=(config.camera.render_res, config.camera.render_res), 
+                      save_dir=os.path.join(output_dir, 'renders'))
 
     # Initialize Background
     if "background" not in config:
@@ -174,7 +178,7 @@ def segment(
     # Segmentation
     
     # Create the segmenter
-    segmenter = SATRSAM(config, device)
+    segmenter = SATRSAM(config, device, save_dir=os.path.join(output_dir, 'GLIP_output'))
     segmenter.set_mesh(mesh, point_cloud, spc, octree_level)
     segmenter.set_prompts(prompts)
     segmenter.set_rendered_views(rendered_images, faces_idx, elev, azim, 2,

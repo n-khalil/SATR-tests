@@ -6,6 +6,7 @@ from tqdm.auto import tqdm
 import potpourri3d as pp3d
 import kaolin as kal
 from PIL import Image
+import os
 
 from copy import deepcopy
 from collections import Counter
@@ -338,7 +339,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                     cv2.putText(img_to_save, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_id], 2)
 
                 PILImage = Image.fromarray(img_to_save)
-                PILImage.save(f'outputs/demo/ABO/cabinet/GLIP_output/view_{i}_{p}.jpg')
+                PILImage.save(os.path.join(self.save_dir, f'view_{i}_{p}.jpg'))
 
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
@@ -416,7 +417,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             return self.predict_face_cls_per_sample()
 
 class SATRSAM(GLIPSAMMeshSegmenter):
-    def __init__(self, cfg, device):
+    def __init__(self, cfg, device, save_dir):
         super().__init__(cfg)
 
         (
@@ -426,6 +427,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.face_visibilty_ratios,
         ) = (None, None, None, None)
         self.device=device
+        self.save_dir=save_dir
 
     def set_mesh(self, mesh, point_cloud=None, spc=None, level=7):
         super().set_mesh(mesh)
