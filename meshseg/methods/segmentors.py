@@ -338,7 +338,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                     cv2.putText(img_to_save, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_id], 2)
 
                 PILImage = Image.fromarray(img_to_save)
-                PILImage.save(f'outputs/demo/ABO/bed/GLIP_output/view_{i}_{p}.jpg')
+                PILImage.save(f'outputs/demo/ABO/cabinet/GLIP_output/view_{i}_{p}.jpg')
 
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
@@ -440,8 +440,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.geodesic_from_point_cloud = True
         if (self.cfg.satr.gaussian_reweighting and self.geodesic_from_point_cloud):
             # print(f"Computing point cloud pairwise distances")
-            self.compute_pt_cloud_pairwise_dist()
-            # self.solver = pp3d.PointCloudHeatSolver(self.point_cloud.cpu().numpy())
+            # self.compute_pt_cloud_pairwise_dist()
+            self.solver = pp3d.PointCloudHeatSolver(self.point_cloud.cpu().numpy())
         elif (self.cfg.satr.gaussian_reweighting):
             print(f"Computing vertices pairwise distances")
             self.compute_vertices_pairwise_dist()
@@ -557,13 +557,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         faces_distance = {}
         distances = []
 
-        # distance_to_all_pts = self.solver.compute_distance(capital_sample_pt_ind)
-        # distances = distance_to_all_pts[faces_dict.items()]
         for k, _ in faces_dict.items():
             if (self.geodesic_from_point_cloud):
-                # _, face_sample_point_ind = self.closest_point_in_pt_cloud_from_face(self.mesh.faces[k].cpu().numpy())
-                # distances.append(self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind])
-                # faces_distance[k] = self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind]
                 _, face_sample_point_ind = self.closest_point_in_pt_cloud_from_face(self.mesh.faces[k].cpu().numpy())
                 distances.append(self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind])
                 faces_distance[k] = self.pt_cloud_distances[face_sample_point_ind, capital_sample_pt_ind]
@@ -598,9 +593,13 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         pts_distance = {}
         distances = []
 
+
+        distance_to_all_pts = self.solver.compute_distance(capital_sample_pt_ind)
         for k in visible_pt_ids:
-            distances.append(self.pt_cloud_distances[k.item(), capital_sample_pt_ind])
-            pts_distance[k.item()] = self.pt_cloud_distances[k.item(), capital_sample_pt_ind]
+            # distances.append(self.pt_cloud_distances[k.item(), capital_sample_pt_ind])
+            # pts_distance[k.item()] = self.pt_cloud_distances[k.item(), capital_sample_pt_ind]
+            distances.append(distance_to_all_pts[k.item()])
+            pts_distance[k.item()] = distance_to_all_pts[k.item()]
 
         distances = np.array(distances)
         mean = np.mean(distances)

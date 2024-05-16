@@ -147,7 +147,7 @@ class Renderer:
             with torch.no_grad():
                 print(f'Num views: {num_views}')
                 for i in range(num_views):
-                    path = f'outputs/demo/ABO/bed/renders/view_{i}.jpg'
+                    path = f'outputs/demo/ABO/cabinet/renders/view_{i}.jpg'
                     img = Image.fromarray((images[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
                     img.save(path)
         if show:
