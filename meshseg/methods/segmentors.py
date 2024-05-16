@@ -289,10 +289,9 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         prompt,
                         self.bbox_predictions[i][prompt],
                         self.elev[i],
-                        self.azim[i]
+                        self.azim[i],
+                        view=i,
                     )
-
-
                 samples_cls[:, j] += sample_view_prompt_score
                 samples_freq[:, j] += sample_view_prompt_freq
 
@@ -788,7 +787,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
-    def process_box_predictions_per_sample(self, prompt, preds, elev, azim):
+    def process_box_predictions_per_sample(self, prompt, preds, elev, azim, view):
         # Initialize a score vector for each sample in the PC for the given region prompt (e.g. "the leg of a person").
         sample_view_prompt_score = np.zeros((self.point_cloud.shape[0]))
         sample_view_freq = np.zeros((self.point_cloud.shape[0]))
@@ -811,6 +810,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             )
             bb = [(col_min, row_min), (col_max, row_max)]
             included_pts_ids = self.project_bb_on_pt(bb, elev, azim)
+
+
 
             # if ('back' in prompt):
             #     colors = np.zeros((self.point_cloud.shape[0], 3))

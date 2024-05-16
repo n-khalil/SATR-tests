@@ -101,8 +101,8 @@ def segment(
     n_samples_factor = 2
     if ("n_samples_factor" in config.satr):
         n_samples_factor = config.satr.n_samples_factor
-    point_cloud = MeshSampler(mesh, device, n_samples_factor)()
-
+    point_cloud = MeshSampler(mesh, device, os.path.join(output_dir, 'point_cloud.npy'), n_samples_factor)()
+    return
     # Build SPC
     if ("octree_level" in config.satr):
         octree_level = config.satr.octree_level

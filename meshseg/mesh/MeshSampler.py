@@ -5,16 +5,18 @@ from collections import defaultdict
 import kaolin as kal
 
 class MeshSampler:
-    def __init__(self, mesh, device, n_samples_factor=2):
+    def __init__(self, mesh, device, save_dir, n_samples_factor=2):
         self.mesh = mesh
         self.n_samples_factor = n_samples_factor
         self.device = device
+        self.save_dir = save_dir
 
     def sample_mesh(self, n_samples):
         trimeshMesh = trimesh.Trimesh(self.mesh.vertices.cpu().numpy(), self.mesh.faces.cpu().numpy())
         point_cloud, pt_to_face = trimesh.sample.sample_surface_even(trimeshMesh, n_samples)
         print(f'Sampled {point_cloud.shape[0]} points')
         torchPC = torch.tensor(point_cloud, device=self.device, dtype=torch.float32)
+        np.save(self.save_dir, np.array(point_cloud))
         face_to_all_pts = defaultdict(list)
         for pt in range(len(point_cloud)):
             face_to_all_pts[pt_to_face[pt]].append(pt)

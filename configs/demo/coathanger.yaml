@@ -13,7 +13,7 @@ satr:
   sam: false
   geodesic_from_point_cloud: true
   per_face: false
-  octree_level: 7
+  octree_level: 8
 
 
 camera:
