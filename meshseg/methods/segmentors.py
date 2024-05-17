@@ -13,7 +13,7 @@ from copy import deepcopy
 from collections import Counter
 from collections import defaultdict
 from scipy.spatial.distance import cdist
-from sklearn.neighbors import NearestNeighbors
+from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt
 import cv2
@@ -461,6 +461,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         self.pt_to_face = point_cloud[1]
         self.face_to_all_pts = point_cloud[2]
         self.pts_normals = point_cloud[3]
+        self.tree = cKDTree(self.point_cloud.cpu().numpy())
         if ('geodesic_from_point_cloud' in self.cfg.satr):
             self.geodesic_from_point_cloud = self.cfg.satr.geodesic_from_point_cloud
         else:
@@ -521,8 +522,10 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
     def get_samples_neighborhood(self):
         n = self.cfg.satr.face_smoothing_n_ring
-        nbrs = NearestNeighbors(n_neighbors=n, algorithm='ball_tree').fit(self.point_cloud.cpu().numpy())
-        _, knn = nbrs.kneighbors(self.point_cloud.cpu().numpy())
+        # nbrs = NearestNeighbors(n_neighbors=n, algorithm='ball_tree').fit(self.point_cloud.cpu().numpy())
+        # _, knn = nbrs.kneighbors(self.point_cloud.cpu().numpy())
+
+        _, knn = self.tree.query(self.point_cloud.cpu().numpy(), n)
 
         pts_adjacency = defaultdict(set)
 
