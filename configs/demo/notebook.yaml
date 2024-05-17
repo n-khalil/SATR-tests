@@ -14,15 +14,15 @@ satr:
   sam: false
   geodesic_from_point_cloud: true
   per_face: false
-  octree_level: 7
+  octree_level: 8
 
 camera:
   n_views: 2
   frontview_std: 4
   frontview_center: [3.14, 0.0]
   render_res: 1024
-  random_rendering: true
+  random_rendering: false
 
-# color: "vertex normals"
+color: "vertex normals"
 background: [255., 255., 255.]
 

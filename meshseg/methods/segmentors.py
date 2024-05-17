@@ -7,6 +7,7 @@ import potpourri3d as pp3d
 import kaolin as kal
 from PIL import Image
 import os
+import json
 
 from copy import deepcopy
 from collections import Counter
@@ -242,7 +243,22 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
 
     def predict_face_cls_per_sample(self):
         samples_cls, samples_freq = self.predict_samples_cls()
+        samples_cls = torch.tensor(samples_cls)
 
+        pts_not_assigned = torch.where(torch.sum(samples_cls, axis=-1) < 0.0001)[0]
+        predictions_cls = samples_cls.argmax(axis=-1)
+        predictions_cls[pts_not_assigned] = len(self.prompts)
+
+        # The predictions now are saved as strings
+        with open(os.path.join(self.output_dir, "samples_preds.json"), "w") as fout:
+            sample_str_cls = []
+            for el in list(predictions_cls.cpu().numpy().astype(int)):
+                sample_str_cls.append(self.cls_id_to_name[int(el)])
+            json.dump(sample_str_cls, fout)
+
+        return self.aggregate_face_scores(samples_cls.cpu().numpy())
+
+    def aggregate_face_scores(self, samples_cls):
         face_cls = np.zeros((len(self.mesh.faces), len(self.prompts)))
         face_freq = np.zeros((len(self.mesh.faces), len(self.prompts)))
 
@@ -250,6 +266,14 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             pts = np.array(self.face_to_all_pts[f]).astype(np.int16)
             if (len(pts) > 0):
                 face_cls[f, :] = np.sum(samples_cls[pts, :], axis=0)
+            else:
+                face_center =  self.mesh.vertices[self.mesh.faces[f, 0]] + \
+                            self.mesh.vertices[self.mesh.faces[f, 1]] + \
+                            self.mesh.vertices[self.mesh.faces[f, 2]]
+                face_center /= 3.0
+
+                _, closest_pt_id = self.closest_point_in_pt_cloud_from_vertex(face_center.view(1,-1).cpu().numpy())
+                face_cls[f, :] = samples_cls[closest_pt_id, :]                
 
         return face_cls, face_freq
 
@@ -338,7 +362,8 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                     cv2.putText(img_to_save, p + " " + str(np.round(score, 2)), (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors_dict[p_id], 2)
 
                 PILImage = Image.fromarray(img_to_save)
-                PILImage.save(os.path.join(self.save_dir, f'view_{i}_{p}.jpg'))
+                save_dir = os.path.join(self.output_dir, 'GLIP_output')
+                PILImage.save(os.path.join(save_dir, f'view_{i}_{p[:-1]}.jpg'))
 
                 self.bbox_predictions[i][p] = (res, self.glip_model.model.entities)
             
@@ -416,7 +441,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
             return self.predict_face_cls_per_sample()
 
 class SATRSAM(GLIPSAMMeshSegmenter):
-    def __init__(self, cfg, device, save_dir):
+    def __init__(self, cfg, device, output_dir, cls_id_to_name):
         super().__init__(cfg)
 
         (
@@ -426,7 +451,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             self.face_visibilty_ratios,
         ) = (None, None, None, None)
         self.device=device
-        self.save_dir=save_dir
+        self.output_dir=output_dir
+        self.cls_id_to_name = cls_id_to_name
 
     def set_mesh(self, mesh, point_cloud=None, spc=None, level=7):
         super().set_mesh(mesh)
@@ -798,6 +824,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             pred_bboxes
         )  # The number of predcited bounding boxes for the given prompt (e.g., the leg of a person).
 
+        all_included_pts_ids = set()
         for i in range(n_boxes):
             if pred_bboxes.get_field("labels")[i].item() != 1 and "of" in prompt:
                 continue
@@ -810,9 +837,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
             )
             bb = [(col_min, row_min), (col_max, row_max)]
             included_pts_ids = self.project_bb_on_pt(bb, elev, azim)
-
-
-
+            all_included_pts_ids = all_included_pts_ids.union(set(list(included_pts_ids.cpu().numpy())))
             # if ('back' in prompt):
             #     colors = np.zeros((self.point_cloud.shape[0], 3))
             #     colors[included_pts_ids.cpu().numpy()] = np.array([0,0,255])
@@ -832,6 +857,9 @@ class SATRSAM(GLIPSAMMeshSegmenter):
                     final_factor *= f[k.item()]
 
                 sample_view_prompt_score[k.item()] += confidence_score * final_factor
+
+        save_dir = os.path.join(self.output_dir, 'included_pts')
+        np.save(os.path.join(save_dir, f'view_{view}_{prompt[:-1]}.npy'), np.array(list(all_included_pts_ids)))
 
         return sample_view_prompt_score, sample_view_freq
 
@@ -896,7 +924,8 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         # included_pt_ids = self.features[pidx]
         dot_prods = torch.sum(torch.mul(self.pts_normals[self.features[pidx]].squeeze(),
                                                    ray_d[ridx]), dim=1).unsqueeze(1)
-        threshold = -0.5
+        # threshold = -0.5
+        threshold = 0.0
         included_pt_ids = torch.where(dot_prods < threshold, self.features[pidx], -1)
         included_pt_ids = included_pt_ids[included_pt_ids>=0]
 

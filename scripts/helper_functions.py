@@ -69,6 +69,8 @@ def segment(
 
     os.makedirs(os.path.join(output_dir, 'renders'), exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'GLIP_output'), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'included_pts'), exist_ok=True)
+
 
     # Save the config in the output folder
     with open(os.path.join(output_dir, "config.yaml"), "w") as fout:
@@ -102,7 +104,7 @@ def segment(
     if ("n_samples_factor" in config.satr):
         n_samples_factor = config.satr.n_samples_factor
     point_cloud = MeshSampler(mesh, device, os.path.join(output_dir, 'point_cloud.npy'), n_samples_factor)()
-    return
+
     # Build SPC
     if ("octree_level" in config.satr):
         octree_level = config.satr.octree_level
@@ -178,7 +180,7 @@ def segment(
     # Segmentation
     
     # Create the segmenter
-    segmenter = SATRSAM(config, device, save_dir=os.path.join(output_dir, 'GLIP_output'))
+    segmenter = SATRSAM(config, device, output_dir, cls_id_to_name)
     segmenter.set_mesh(mesh, point_cloud, spc, octree_level)
     segmenter.set_prompts(prompts)
     segmenter.set_rendered_views(rendered_images, faces_idx, elev, azim, 2,

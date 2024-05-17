@@ -18,11 +18,11 @@ satr:
 
 
 camera:
-  n_views: 2
+  n_views: 1
   frontview_std: 4
   frontview_center: [3.14, 0.0]
   render_res: 1024
-  random_rendering: true
+  random_rendering: false
 
 color: "vertex normals"
 
