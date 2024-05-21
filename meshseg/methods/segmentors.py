@@ -12,7 +12,7 @@ import json
 from copy import deepcopy
 from collections import Counter
 from collections import defaultdict
-from scipy.spatial.distance import cdist
+# from scipy.spatial.distance import cdist
 from scipy.spatial import cKDTree
 
 import matplotlib.pyplot as plt
@@ -315,6 +315,7 @@ class GLIPSAMMeshSegmenter(BaseDetMeshSegmentor):
                         self.elev[i],
                         self.azim[i],
                         view=i,
+                        rendering_face_ids = self.rendered_images_face_ids[i].squeeze(0)
                     )
                 samples_cls[:, j] += sample_view_prompt_score
                 samples_freq[:, j] += sample_view_prompt_freq
@@ -678,11 +679,14 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
     def closest_point_in_pt_cloud_from_vertex(self, vertex):
         # Find the closest point in point cloud to the given vertex
-        distances = cdist(
-            self.point_cloud.cpu().numpy(),
-            vertex.reshape(1,-1),
-        )
-        closest_pt_ind = np.argmin(distances[:, 0])
+        # distances = cdist(
+        #     self.point_cloud.cpu().numpy(),
+        #     vertex.reshape(1,-1),
+        # )
+        # closest_pt_ind = np.argmin(distances[:, 0])
+
+        _, closest_pt_ind = self.tree.query(vertex.reshape(-1, 3), 1)
+
         return self.point_cloud[closest_pt_ind], closest_pt_ind
 
     def closest_point_in_pt_cloud_from_face(self, face):
@@ -816,7 +820,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
-    def process_box_predictions_per_sample(self, prompt, preds, elev, azim, view):
+    def process_box_predictions_per_sample(self, prompt, preds, elev, azim, view, rendering_face_ids):
         # Initialize a score vector for each sample in the PC for the given region prompt (e.g. "the leg of a person").
         sample_view_prompt_score = np.zeros((self.point_cloud.shape[0]))
         sample_view_freq = np.zeros((self.point_cloud.shape[0]))
@@ -839,7 +843,7 @@ class SATRSAM(GLIPSAMMeshSegmenter):
                 bbox_cor[2:].tolist(),
             )
             bb = [(col_min, row_min), (col_max, row_max)]
-            included_pts_ids = self.project_bb_on_pt(bb, elev, azim)
+            included_pts_ids = self.project_bb_on_pt(bb, elev, azim, rendering_face_ids)
             all_included_pts_ids = all_included_pts_ids.union(set(list(included_pts_ids.cpu().numpy())))
             # if ('back' in prompt):
             #     colors = np.zeros((self.point_cloud.shape[0], 3))
@@ -914,10 +918,14 @@ class SATRSAM(GLIPSAMMeshSegmenter):
 
         return face_view_prompt_score, face_view_freq
     
-    def project_bb_on_pt(self, bb, elev, azim):
+    def project_bb_on_pt(self, bb, elev, azim, face_idx):
+        # Generate rays in BB
+        # A ray is defind by origin and direction vectors
         ray_o, ray_d = self.generate_rays_bb(bb, elev, azim)
+        # Perform ray tracing
         nugs_ridx, nugs_pidx, depth = kal.render.spc.unbatched_raytrace(
             self.octree, self.point_hierarchy, self.pyramid, self.prefix, ray_o, ray_d, self.octree_level)
+        # Conserve only first hits
         masked_nugs = kal.render.spc.mark_pack_boundaries(nugs_ridx)
         nugs_ridx = nugs_ridx[masked_nugs]
         nugs_pidx = nugs_pidx[masked_nugs]
@@ -925,14 +933,29 @@ class SATRSAM(GLIPSAMMeshSegmenter):
         pidx = nugs_pidx.long() - self.pyramid[1, self.octree_level]
 
         # included_pt_ids = self.features[pidx]
+        
+        # Compute the dot product between each ray and the normal of the hit point 
         dot_prods = torch.sum(torch.mul(self.pts_normals[self.features[pidx]].squeeze(),
                                                    ray_d[ridx]), dim=1).unsqueeze(1)
+        # Include points where the normal is negative only
         # threshold = -0.5
         threshold = 0.0
         included_pt_ids = torch.where(dot_prods < threshold, self.features[pidx], -1)
         included_pt_ids = included_pt_ids[included_pt_ids>=0]
+        included_pt_ids = included_pt_ids.squeeze().unique().cpu().numpy()
 
-        return included_pt_ids.squeeze().unique()
+        (startX, startY) , (endX, endY) = (bb[0], bb[1])
+        # Project back on faces
+        included_faces = torch.flatten(face_idx[startY:endY, startX:endX]).unique()
+        # Get set of all points on these faces
+        all_pt_lst_ids = set()
+        for face_id in included_faces:
+            pt_lst_ids = self.face_to_all_pts[face_id.item()]
+            all_pt_lst_ids = all_pt_lst_ids.union(set(pt_lst_ids))
+
+        # Take intersection between the two sets of points
+        final_included_pt_ids = torch.tensor(np.array(list(all_pt_lst_ids.intersection(set(included_pt_ids))))).to(self.device).to(torch.int64)
+        return final_included_pt_ids
 
     def generate_rays_bb(self, bbox, elev, azim):
         aspect_ratio = self.width / self.height
